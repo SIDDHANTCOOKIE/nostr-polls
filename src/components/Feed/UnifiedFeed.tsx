@@ -159,8 +159,8 @@ function UnifiedFeed<T>({
             endReached={onEndReached}
             startReached={onStartReached}
             followOutput={followOutput}
-            increaseViewportBy={{ top: 600, bottom: 600 }}
-            defaultItemHeight={350}
+            increaseViewportBy={{ top: 2000, bottom: 1200 }}
+            defaultItemHeight={600}
             scrollerRef={(el) => { virtuosoScrollerRef.current = el as HTMLElement | null; }}
             onScroll={
               isImmersive

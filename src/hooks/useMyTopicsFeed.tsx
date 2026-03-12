@@ -45,6 +45,7 @@ export function useMyTopicsFeed(myTopics: Set<string>) {
   const seenModeration = useRef<Set<string>>(new Set());
   const deletedModerationIds = useRef<Set<string>>(new Set());
   const pendingNotesRef = useRef<Map<string, TopicNote>>(new Map());
+  const initialLoadDoneRef = useRef(false);
 
   const { getScrollTop } = useFeedScroll();
 
@@ -206,6 +207,8 @@ export function useMyTopicsFeed(myTopics: Set<string>) {
 
     const topics = Array.from(myTopics);
 
+    initialLoadDoneRef.current = false;
+
     const sub = nostrRuntime.subscribe(
       relays,
       [
@@ -214,6 +217,7 @@ export function useMyTopicsFeed(myTopics: Set<string>) {
         { kinds: [5], "#k": [String(OFFTOPIC_KIND)], limit: 500 },
       ],
       {
+        onEose: () => { initialLoadDoneRef.current = true; },
         onEvent: (event) => {
           /* ---- deletion events ---- */
           if (event.kind === 5) {
@@ -238,7 +242,7 @@ export function useMyTopicsFeed(myTopics: Set<string>) {
 
             if (topics.length === 0) return;
 
-            if (getScrollTop() > 0) {
+            if (initialLoadDoneRef.current && getScrollTop() > 0) {
               pendingNotesRef.current.set(event.id, { event, topics });
               setPendingCount((c) => c + 1);
             } else {

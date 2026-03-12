@@ -1,3 +1,8 @@
+# 1.4.4
+
+- Revert AI setting to ollama directly
+- Fix blank page isue when person goes back from profile page
+
 # 1.4.3
 
 - Fix feed issues

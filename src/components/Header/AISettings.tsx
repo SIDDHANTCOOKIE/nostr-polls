@@ -6,60 +6,53 @@ import {
   Typography,
   Button,
   Link,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
+  Alert,
 } from "@mui/material";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import SmartphoneIcon from "@mui/icons-material/Smartphone";
 import { useEffect, useState } from "react";
 import { useAppContext } from "../../hooks/useAppContext";
 import { aiService } from "../../services/ai-service";
+import { isNative } from "../../utils/platform";
 
 const LOCAL_STORAGE_KEY = "ai-settings";
-const NRPC_CONFIG_KEY = "nrpc-ai-config";
-const NRPC_DOCS_LINK = "https://github.com/formstr-hq/formstr-nrpc-server";
+const CONFIG_KEY = "ollama-ai-config";
+const DEFAULT_URL = "http://localhost:11434";
 
-// Default values
-const DEFAULT_SERVER_PUBKEY = process.env.REACT_APP_NRPC_SERVER_PUBKEY || "";
-const DEFAULT_RELAYS =
-  process.env.REACT_APP_NRPC_RELAYS ||
-  "wss://relay.damus.io,wss://relay.snort.social";
+// Zapstore link — will be updated when available
+const ZAPSTORE_LINK = "https://zapstore.dev/apps/com.formstr.pollerama";
 
 export const AISettings: React.FC = () => {
   const { aiSettings, setAISettings } = useAppContext();
 
+  const [ollamaUrl, setOllamaUrl] = useState(DEFAULT_URL);
   const [localModel, setLocalModel] = useState(aiSettings.model || "");
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  // nRPC server configuration
-  const [serverPubkey, setServerPubkey] = useState("");
-  const [relays, setRelays] = useState("");
-
-  // Load nRPC config from localStorage on mount
+  // Load saved config on mount
   useEffect(() => {
     try {
-      const stored = localStorage.getItem(NRPC_CONFIG_KEY);
+      const stored = localStorage.getItem(CONFIG_KEY);
       if (stored) {
         const config = JSON.parse(stored);
-        setServerPubkey(config.serverPubkey || DEFAULT_SERVER_PUBKEY);
-        setRelays((config.relays || []).join(",") || DEFAULT_RELAYS);
-      } else {
-        setServerPubkey(DEFAULT_SERVER_PUBKEY);
-        setRelays(DEFAULT_RELAYS);
+        if (config.url) setOllamaUrl(config.url);
       }
     } catch {
-      setServerPubkey(DEFAULT_SERVER_PUBKEY);
-      setRelays(DEFAULT_RELAYS);
+      // ignore
     }
+  }, []);
+
+  // Auto-fetch models on native (no CORS issues)
+  useEffect(() => {
+    if (isNative) fetchModels();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchModels = async () => {
     setLoading(true);
     setError(null);
-
     try {
       const response = await aiService.getModels();
       if (
@@ -67,55 +60,27 @@ export const AISettings: React.FC = () => {
         response.data &&
         Array.isArray(response.data.models)
       ) {
-        const models = response.data.models.map((m: any) => m.name);
-        setAvailableModels(models);
+        setAvailableModels(response.data.models.map((m: any) => m.name));
       } else {
-        setError(response.error || "⚠️ Failed to fetch AI models.");
+        setError(response.error || "Failed to fetch models.");
       }
     } catch (err: any) {
-      setError(err?.message || "⚠️ Failed to communicate with AI service.");
+      setError(err?.message || "Failed to communicate with Ollama.");
     } finally {
       setLoading(false);
     }
   };
 
-  // Fetch models when component mounts and config is loaded
-  useEffect(() => {
-    if (serverPubkey && relays) {
-      fetchModels();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverPubkey, relays]);
-
-  const handleSaveConfig = () => {
-    // Validate inputs
-    if (!serverPubkey.trim()) {
-      setError("Server public key is required");
+  const handleSaveUrl = () => {
+    if (!ollamaUrl.trim()) {
+      setError("Ollama URL is required");
       return;
     }
-    if (!relays.trim()) {
-      setError("At least one relay is required");
-      return;
-    }
-
-    // Save nRPC config
-    const config = {
-      serverPubkey: serverPubkey.trim(),
-      relays: relays
-        .split(",")
-        .map((r) => r.trim())
-        .filter(Boolean),
-    };
-    localStorage.setItem(NRPC_CONFIG_KEY, JSON.stringify(config));
-
-    // Update aiService with new config
-    aiService.updateConfig(config);
-
-    // Refresh models list
+    localStorage.setItem(CONFIG_KEY, JSON.stringify({ url: ollamaUrl.trim() }));
+    aiService.updateConfig({ url: ollamaUrl.trim() });
     setAvailableModels([]);
     setLocalModel("");
     fetchModels();
-
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
@@ -128,79 +93,96 @@ export const AISettings: React.FC = () => {
     setTimeout(() => setSaved(false), 2000);
   };
 
+  // On web, show notice to use the native app
+  if (!isNative) {
+    return (
+      <Box p={2} sx={{ bgcolor: "background.paper", color: "text.primary" }}>
+        <Typography variant="h6" gutterBottom>
+          AI Settings
+        </Typography>
+        <Alert icon={<SmartphoneIcon />} severity="info" sx={{ mt: 1 }}>
+          <Typography variant="body2" gutterBottom>
+            <strong>AI features require the native app.</strong>
+          </Typography>
+          <Typography variant="body2" gutterBottom>
+            Translation and summaries connect directly to your local Ollama
+            instance. This is not possible in a browser due to CORS
+            restrictions.
+          </Typography>
+          {ZAPSTORE_LINK ? (
+            <Link
+              href={ZAPSTORE_LINK}
+              target="_blank"
+              rel="noopener"
+              underline="hover"
+            >
+              Download from Zapstore
+            </Link>
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              Download link coming soon.
+            </Typography>
+          )}
+        </Alert>
+      </Box>
+    );
+  }
+
   return (
     <Box p={2} sx={{ bgcolor: "background.paper", color: "text.primary" }}>
       <Typography variant="h6" gutterBottom>
         AI Settings
       </Typography>
       <Typography variant="body2" color="text.secondary" gutterBottom>
-        AI features are powered by nRPC. Configure your server below.
+        Connect to your local{" "}
+        <Link
+          href="https://ollama.com"
+          target="_blank"
+          rel="noopener"
+          underline="hover"
+        >
+          Ollama
+        </Link>{" "}
+        instance for translation and summaries.
       </Typography>
 
-      {/* nRPC Server Configuration */}
-      <Accordion defaultExpanded sx={{ mt: 2 }}>
-        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          <Typography variant="subtitle1">nRPC Server Configuration</Typography>
-        </AccordionSummary>
-        <AccordionDetails>
-          <Box>
-            <TextField
-              label="Server Public Key (hex or npub)"
-              fullWidth
-              value={serverPubkey}
-              onChange={(e) => {
-                setServerPubkey(e.target.value);
-                setSaved(false);
-              }}
-              margin="normal"
-              placeholder="npub1... or hex pubkey"
-              helperText="The public key of your nRPC AI server"
-            />
-            <TextField
-              label="Relays (comma-separated)"
-              fullWidth
-              value={relays}
-              onChange={(e) => {
-                setRelays(e.target.value);
-                setSaved(false);
-              }}
-              margin="normal"
-              placeholder="wss://relay.damus.io,wss://relay.snort.social"
-              helperText="Nostr relays to use for nRPC communication"
-            />
-            <Box mt={2} display="flex" alignItems="center" gap={2}>
-              <Button
-                variant="outlined"
-                onClick={handleSaveConfig}
-                disabled={loading}
-              >
-                Save & Reload Models
-              </Button>
-              <Link
-                href={NRPC_DOCS_LINK}
-                target="_blank"
-                rel="noopener"
-                underline="hover"
-                variant="body2"
-              >
-                Setup your own nRPC server:
-              </Link>
-            </Box>
-          </Box>
-        </AccordionDetails>
-      </Accordion>
+      {/* Ollama URL */}
+      <Box mt={2}>
+        <TextField
+          label="Ollama URL"
+          fullWidth
+          value={ollamaUrl}
+          onChange={(e) => {
+            setOllamaUrl(e.target.value);
+            setSaved(false);
+          }}
+          margin="normal"
+          placeholder="http://localhost:11434"
+          helperText="URL of your local Ollama server"
+        />
+        <Box mt={1} display="flex" alignItems="center" gap={2}>
+          <Button variant="outlined" onClick={handleSaveUrl} disabled={loading}>
+            Save & Load Models
+          </Button>
+          {saved && (
+            <Typography variant="body2" color="success.main">
+              ✅ Saved
+            </Typography>
+          )}
+        </Box>
+      </Box>
 
       {/* Model Selection */}
       <Box mt={3}>
         <Typography variant="subtitle1" gutterBottom>
-          Model Selection
+          Model
         </Typography>
 
         {loading ? (
           <Box mt={2} display="flex" alignItems="center">
             <CircularProgress size={20} />
             <Typography variant="body2" ml={1}>
-              Loading models from nRPC server…
+              Loading models from Ollama…
             </Typography>
           </Box>
         ) : availableModels.length > 0 ? (
@@ -239,8 +221,8 @@ export const AISettings: React.FC = () => {
           </>
         ) : (
           <Typography mt={2} variant="body2" color="text.secondary">
-            No models available. Configure your nRPC server above and click
-            "Save & Reload Models".
+            No models loaded. Make sure Ollama is running and click "Save & Load
+            Models".
           </Typography>
         )}
       </Box>
@@ -252,29 +234,25 @@ export const AISettings: React.FC = () => {
             {error}
           </Typography>
           <Typography variant="body2" color="error.contrastText" gutterBottom>
-            Troubleshooting checklist:
+            Troubleshooting:
           </Typography>
           <ul
             style={{ margin: "8px 0", paddingLeft: "20px", color: "inherit" }}
           >
             <li>
               <Typography variant="body2" color="error.contrastText">
-                You are logged in to nostr-polls
+                Ollama is installed and running
               </Typography>
             </li>
             <li>
               <Typography variant="body2" color="error.contrastText">
-                nRPC server pubkey is correct
+                At least one model is pulled (e.g.{" "}
+                <code>ollama pull llama3</code>)
               </Typography>
             </li>
             <li>
               <Typography variant="body2" color="error.contrastText">
-                nRPC AI server is running
-              </Typography>
-            </li>
-            <li>
-              <Typography variant="body2" color="error.contrastText">
-                Ollama is installed and running on the server
+                The URL above matches your Ollama server address
               </Typography>
             </li>
           </ul>
