@@ -43,6 +43,11 @@ import { useRelays } from "../../hooks/useRelays";
 import { useNotification } from "../../contexts/notification-context";
 import { NOTIFICATION_MESSAGES } from "../../constants/notifications";
 import { aiService } from "../../services/ai-service";
+import { useReports } from "../../hooks/useReports";
+import { ReportDialog } from "../Report/ReportDialog";
+import { ReportReason } from "../../contexts/reports-context";
+import FlagIcon from "@mui/icons-material/Flag";
+import OverlappingAvatars from "../Common/OverlappingAvatars";
 
 interface NotesProps {
   event: Event;
@@ -83,6 +88,11 @@ export const Notes: React.FC<NotesProps> = ({
   const [showContactListWarning, setShowContactListWarning] = useState(false);
   const [pendingFollowKey, setPendingFollowKey] = useState<string | null>(null);
   const { showNotification } = useNotification();
+
+  const { reportEvent, reportUser, isReportedByMe, getWoTReporters, wotReportThreshold, requestUserReportCheck } = useReports();
+  const [reportPostDialogOpen, setReportPostDialogOpen] = useState(false);
+  const [reportUserDialogOpen, setReportUserDialogOpen] = useState(false);
+  const [showReportedAnyway, setShowReportedAnyway] = useState(false);
 
   // Broadcast state
   const [isBroadcasting, setIsBroadcasting] = useState(false);
@@ -253,6 +263,34 @@ export const Notes: React.FC<NotesProps> = ({
     }
   };
 
+  const handleReportPost = async (reason: ReportReason, content: string) => {
+    await reportEvent(event.id, event.pubkey, reason, content);
+    showNotification("Post reported", "success");
+  };
+
+  const handleReportUser = async (reason: ReportReason, content: string) => {
+    await reportUser(event.pubkey, reason, content);
+    showNotification("User reported", "success");
+  };
+
+  // Ensure WoT user-level reports are fetched for this author
+  useEffect(() => {
+    requestUserReportCheck([event.pubkey]);
+  }, [event.pubkey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const wotEventReporters = getWoTReporters(event.id);
+  const wotAuthorReporters = getWoTReporters(event.pubkey);
+  // Merge: someone who reported the author is effectively reporting all their posts
+  const wotReporters = new Set([
+    ...Array.from(wotEventReporters),
+    ...Array.from(wotAuthorReporters),
+  ]);
+  const hiddenByReport =
+    !showReportedAnyway &&
+    (isReportedByMe(event.id) ||
+      isReportedByMe(event.pubkey) ||
+      (wotReportThreshold > 0 && wotReporters.size >= wotReportThreshold));
+
   const theme = useTheme();
   const isSmall = useMediaQuery(theme.breakpoints.down("sm"));
   const isMedium = useMediaQuery(theme.breakpoints.between("sm", "md"));
@@ -283,7 +321,35 @@ export const Notes: React.FC<NotesProps> = ({
   const timeAgo = calculateTimeAgo(event.created_at);
   return (
     <>
-      {hidden ? (
+      {hiddenByReport ? (
+        <Card
+          variant="outlined"
+          sx={{ m: 1, p: 1.5, border: "1px dashed #e57373" }}
+        >
+          <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
+            <Typography variant="body2" color="text.secondary">
+              Content hidden — reported by
+            </Typography>
+            <OverlappingAvatars
+              ids={
+                isReportedByMe(event.id) && wotReporters.size === 0
+                  ? [user!.pubkey]
+                  : isReportedByMe(event.id)
+                  ? [user!.pubkey, ...Array.from(wotReporters)]
+                  : Array.from(wotReporters)
+              }
+              maxAvatars={5}
+            />
+            <Button
+              size="small"
+              sx={{ ml: "auto" }}
+              onClick={() => setShowReportedAnyway(true)}
+            >
+              Show anyway
+            </Button>
+          </Box>
+        </Card>
+      ) : hidden ? (
         <Card
           variant="outlined"
           sx={{
@@ -390,6 +456,30 @@ export const Notes: React.FC<NotesProps> = ({
             <MenuItem onClick={handleCopyNevent}>Copy Event Id</MenuItem>
             <MenuItem onClick={copyNoteUrl}>Copy Link</MenuItem>
             <MenuItem onClick={handleCopyNpub}>Copy Author npub</MenuItem>
+            {user && (
+              <MenuItem
+                onClick={() => {
+                  handleCloseMenu();
+                  setReportPostDialogOpen(true);
+                }}
+                sx={{ color: "error.main" }}
+              >
+                <FlagIcon fontSize="small" sx={{ mr: 1 }} />
+                Report post
+              </MenuItem>
+            )}
+            {user && (
+              <MenuItem
+                onClick={() => {
+                  handleCloseMenu();
+                  setReportUserDialogOpen(true);
+                }}
+                sx={{ color: "error.main" }}
+              >
+                <FlagIcon fontSize="small" sx={{ mr: 1 }} />
+                Report user
+              </MenuItem>
+            )}
             {extras}
           </Menu>
 
@@ -530,6 +620,19 @@ export const Notes: React.FC<NotesProps> = ({
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ReportDialog
+        open={reportPostDialogOpen}
+        onClose={() => setReportPostDialogOpen(false)}
+        onSubmit={handleReportPost}
+        title="Report post"
+      />
+      <ReportDialog
+        open={reportUserDialogOpen}
+        onClose={() => setReportUserDialogOpen(false)}
+        onSubmit={handleReportUser}
+        title="Report user"
+      />
     </>
   );
 };

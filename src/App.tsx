@@ -28,6 +28,7 @@ import { RelayProvider } from "./contexts/relay-context";
 import { RelayHealthProvider } from "./contexts/RelayHealthContext";
 import { NostrNotificationsProvider } from "./contexts/nostr-notification-context";
 import { DMProvider } from "./contexts/dm-context";
+import { ReportsProvider } from "./contexts/reports-context";
 import { TranslationBatchProvider } from "./contexts/translation-batch-context";
 import { FeedScrollProvider, useFeedScroll } from "./contexts/FeedScrollContext";
 import { VideoPlayerProvider } from "./contexts/VideoPlayerContext";
@@ -199,6 +200,7 @@ const App: React.FC = () => {
                 <TranslationBatchProvider>
                   <ListProvider>
                     <RatingProvider>
+                      <ReportsProvider>
                       <CssBaseline />
                       <MetadataProvider>
                         <VideoPlayerProvider>
@@ -211,6 +213,7 @@ const App: React.FC = () => {
                           </Router>
                         </VideoPlayerProvider>
                       </MetadataProvider>
+                      </ReportsProvider>
                     </RatingProvider>
                   </ListProvider>
                 </TranslationBatchProvider>

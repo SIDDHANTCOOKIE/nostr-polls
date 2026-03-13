@@ -2,13 +2,16 @@
  * AIService - Direct Ollama API client
  *
  * Calls Ollama HTTP API directly (no NRPC / relay overhead).
- * CORS: native Capacitor app has no CORS restrictions.
- *       On the web, requests to localhost:11434 will be blocked — users
- *       should install the native app from Zapstore.
+ * On native (Android/iOS): uses CapacitorHttp which makes requests at the
+ *   native layer — bypasses WebView CORS and mixed-content restrictions entirely.
+ * On web: requests to localhost:11434 will be blocked by CORS — users
+ *   should install the native app from Zapstore.
  *
  * Config stored in localStorage under "ollama-ai-config":
  *   { url: "http://localhost:11434", model: "llama3" }
  */
+import { CapacitorHttp } from "@capacitor/core";
+import { isNative } from "../utils/platform";
 
 export interface OllamaResponse<T> {
   success: boolean;
@@ -30,11 +33,15 @@ class AIService {
       const stored = localStorage.getItem(CONFIG_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (parsed.url) return { url: parsed.url, timeout: parsed.timeout };
+        if (parsed.url) {
+          console.log("[AIService] loadConfig: using saved URL:", parsed.url);
+          return { url: parsed.url, timeout: parsed.timeout };
+        }
       }
-    } catch {
-      // ignore
+    } catch (e) {
+      console.warn("[AIService] loadConfig: failed to parse config:", e);
     }
+    console.log("[AIService] loadConfig: using default URL:", DEFAULT_URL);
     return { url: DEFAULT_URL };
   }
 
@@ -47,6 +54,26 @@ class AIService {
     options: RequestInit,
     timeoutMs = 60000
   ): Promise<Response> {
+    if (isNative) {
+      // CapacitorHttp bypasses WebView CORS and mixed-content restrictions
+      const method = (options.method || "GET").toUpperCase();
+      const headers = (options.headers as Record<string, string>) || {};
+      const body = options.body as string | undefined;
+      const res = await CapacitorHttp.request({
+        url,
+        method,
+        headers,
+        data: body ? JSON.parse(body) : undefined,
+        connectTimeout: timeoutMs,
+        readTimeout: timeoutMs,
+      });
+      // Wrap in a Response-like object
+      const resBody = typeof res.data === "string" ? res.data : JSON.stringify(res.data);
+      return new Response(resBody, {
+        status: res.status,
+        headers: res.headers as any,
+      });
+    }
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), timeoutMs);
     try {
@@ -61,23 +88,27 @@ class AIService {
    * GET /api/tags
    */
   async getModels(): Promise<OllamaResponse<{ models: { name: string }[] }>> {
+    const url = `${this.getBaseUrl()}/api/tags`;
+    console.log("[AIService] getModels: fetching", url);
     try {
-      const res = await this.fetchWithTimeout(
-        `${this.getBaseUrl()}/api/tags`,
-        { method: "GET" },
-        15000
-      );
+      const res = await this.fetchWithTimeout(url, { method: "GET" }, 15000);
+      console.log("[AIService] getModels: response status", res.status, res.statusText);
       if (!res.ok) {
-        return { success: false, error: `Ollama returned ${res.status}` };
+        const body = await res.text().catch(() => "");
+        console.warn("[AIService] getModels: non-OK response body:", body);
+        return { success: false, error: `Ollama returned ${res.status}: ${body}` };
       }
       const json = await res.json();
+      console.log("[AIService] getModels: raw json:", JSON.stringify(json));
       const models: { name: string }[] = (json.models || []).map((m: any) => ({
         name: m.name,
       }));
+      console.log("[AIService] getModels: parsed models:", models.map((m) => m.name));
       return { success: true, data: { models } };
     } catch (error: any) {
+      console.error("[AIService] getModels: error:", error.name, error.message, error);
       if (error.name === "AbortError") {
-        return { success: false, error: "Request timed out. Is Ollama running?" };
+        return { success: false, error: "Request timed out (15s). Is Ollama running and reachable?" };
       }
       return {
         success: false,

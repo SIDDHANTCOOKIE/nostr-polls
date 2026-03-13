@@ -7,6 +7,7 @@ import RepostsCard from "./RepostedNoteCard";
 import { useDiscoverNotes } from "../hooks/useDiscoverNotes";
 import type { NoteMode } from "./index";
 import UnifiedFeed from "../../UnifiedFeed";
+import { useReports } from "../../../../hooks/useReports";
 
 const isRootNote = (event: { tags: string[][] }) =>
   !event.tags.some((t) => t[0] === "e");
@@ -15,6 +16,7 @@ const DiscoverFeed = ({ noteMode }: { noteMode: NoteMode }) => {
   const { user, requestLogin } = useUserContext();
   const { notes, pendingCount, fetchNotes, refreshNotes, loadingMore, mergeNewNotes } =
     useDiscoverNotes();
+  const { requestReportCheck, requestUserReportCheck } = useReports();
 
   useEffect(() => {
     if (user && user.webOfTrust && user.webOfTrust.size > 0) {
@@ -34,6 +36,14 @@ const DiscoverFeed = ({ noteMode }: { noteMode: NoteMode }) => {
       }))
       .sort((a, b) => b.latestActivity - a.latestActivity);
   }, [notes, noteMode]);
+
+  // Fetch WoT reports for the current batch of visible note ids and their authors
+  useEffect(() => {
+    if (mergedNotes.length > 0) {
+      requestReportCheck(mergedNotes.map((m) => m.note.id));
+      requestUserReportCheck(mergedNotes.map((m) => m.note.pubkey));
+    }
+  }, [mergedNotes, requestReportCheck, requestUserReportCheck]);
 
   if (!user) {
     return (

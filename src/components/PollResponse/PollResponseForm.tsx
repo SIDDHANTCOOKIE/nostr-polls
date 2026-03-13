@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  Box,
   Button,
   Card,
   CardContent,
@@ -47,6 +48,11 @@ import { FeedbackMenu } from "../FeedbackMenu";
 import { useNotification } from "../../contexts/notification-context";
 import { NOTIFICATION_MESSAGES } from "../../constants/notifications";
 import { pool } from "../../singletons";
+import { useReports } from "../../hooks/useReports";
+import { ReportDialog } from "../Report/ReportDialog";
+import { ReportReason } from "../../contexts/reports-context";
+import FlagIcon from "@mui/icons-material/Flag";
+import OverlappingAvatars from "../Common/OverlappingAvatars";
 
 interface PollResponseFormProps {
   pollEvent: Event;
@@ -89,6 +95,10 @@ const PollResponseForm: React.FC<PollResponseFormProps> = ({
   const { showNotification } = useNotification();
   const { profiles, fetchUserProfileThrottled } = useAppContext();
   const { user, setUser, requestLogin } = useUserContext();
+  const { reportEvent, reportUser, isReportedByMe, getWoTReporters, wotReportThreshold, requestUserReportCheck } = useReports();
+  const [reportPollDialogOpen, setReportPollDialogOpen] = useState(false);
+  const [reportAuthorDialogOpen, setReportAuthorDialogOpen] = useState(false);
+  const [showReportedAnyway, setShowReportedAnyway] = useState(false);
   const { relays } = useRelays();
   const { fetchLatestContactList } = useListContext();
   const difficulty = Number(
@@ -278,9 +288,62 @@ const PollResponseForm: React.FC<PollResponseFormProps> = ({
     }
   };
 
+  useEffect(() => {
+    requestUserReportCheck([pollEvent.pubkey]);
+  }, [pollEvent.pubkey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const wotEventReporters = getWoTReporters(pollEvent.id);
+  const wotAuthorReporters = getWoTReporters(pollEvent.pubkey);
+  const wotReporters = new Set([
+    ...Array.from(wotEventReporters),
+    ...Array.from(wotAuthorReporters),
+  ]);
+  const hiddenByReport =
+    !showReportedAnyway &&
+    (isReportedByMe(pollEvent.id) ||
+      isReportedByMe(pollEvent.pubkey) ||
+      (wotReportThreshold > 0 && wotReporters.size >= wotReportThreshold));
+
+  const handleReportPoll = async (reason: ReportReason, content: string) => {
+    await reportEvent(pollEvent.id, pollEvent.pubkey, reason, content);
+    showNotification("Poll reported", "success");
+  };
+
+  const handleReportAuthor = async (reason: ReportReason, content: string) => {
+    await reportUser(pollEvent.pubkey, reason, content);
+    showNotification("User reported", "success");
+  };
+
   const label =
     pollEvent.tags.find((t) => t[0] === "label")?.[1] || pollEvent.content;
   const options = pollEvent.tags.filter((t) => t[0] === "option");
+  if (hiddenByReport) {
+    return (
+      <div>
+        <Card variant="outlined" sx={{ m: 1, p: 1.5, border: "1px dashed #e57373" }}>
+          <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
+            <Typography variant="body2" color="text.secondary">
+              Content hidden — reported by
+            </Typography>
+            <OverlappingAvatars
+              ids={
+                isReportedByMe(pollEvent.id) && wotReporters.size === 0
+                  ? [user!.pubkey]
+                  : isReportedByMe(pollEvent.id)
+                  ? [user!.pubkey, ...Array.from(wotReporters)]
+                  : Array.from(wotReporters)
+              }
+              maxAvatars={5}
+            />
+            <Button size="small" sx={{ ml: "auto" }} onClick={() => setShowReportedAnyway(true)}>
+              Show anyway
+            </Button>
+          </Box>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div>
       <Card variant="elevation" className="poll-response-form" sx={{ m: 1 }}>
@@ -351,6 +414,32 @@ const PollResponseForm: React.FC<PollResponseFormProps> = ({
               <MenuItem onClick={copyPollUrl}>Copy URL</MenuItem>
               <MenuItem onClick={handleCopyNpub}>Copy Author npub</MenuItem>
               <MenuItem onClick={copyRawEvent}>Copy Raw Event</MenuItem>
+              {user && (
+                <MenuItem
+                  onClick={() => {
+                    setIsDetailsOpen(false);
+                    setAnchorEl(null);
+                    setReportPollDialogOpen(true);
+                  }}
+                  sx={{ color: "error.main" }}
+                >
+                  <FlagIcon fontSize="small" sx={{ mr: 1 }} />
+                  Report poll
+                </MenuItem>
+              )}
+              {user && (
+                <MenuItem
+                  onClick={() => {
+                    setIsDetailsOpen(false);
+                    setAnchorEl(null);
+                    setReportAuthorDialogOpen(true);
+                  }}
+                  sx={{ color: "error.main" }}
+                >
+                  <FlagIcon fontSize="small" sx={{ mr: 1 }} />
+                  Report author
+                </MenuItem>
+              )}
             </Menu>
             <CardContent style={{ display: "flex", flexDirection: "column" }}>
               <Typography variant="body1" sx={{ mb: 1 }}>
@@ -465,6 +554,19 @@ const PollResponseForm: React.FC<PollResponseFormProps> = ({
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ReportDialog
+        open={reportPollDialogOpen}
+        onClose={() => setReportPollDialogOpen(false)}
+        onSubmit={handleReportPoll}
+        title="Report poll"
+      />
+      <ReportDialog
+        open={reportAuthorDialogOpen}
+        onClose={() => setReportAuthorDialogOpen(false)}
+        onSubmit={handleReportAuthor}
+        title="Report author"
+      />
     </div>
   );
 };

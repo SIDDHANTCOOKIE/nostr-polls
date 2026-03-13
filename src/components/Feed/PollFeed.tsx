@@ -3,6 +3,7 @@ import { Event, Filter } from "nostr-tools";
 import { verifyEvent } from "nostr-tools";
 import { useUserContext } from "../../hooks/useUserContext";
 import { useRelays } from "../../hooks/useRelays";
+import { useReports } from "../../hooks/useReports";
 import {
   Select,
   MenuItem,
@@ -102,6 +103,7 @@ export const PollFeed = () => {
 
   const { user } = useUserContext();
   const { relays } = useRelays();
+  const { requestReportCheck, requestUserReportCheck } = useReports();
 
   const mergeEvents = (existing: Event[], incoming: Event[]): Event[] => {
     const map = new Map(existing.map((e) => [e.id, e]));
@@ -323,6 +325,14 @@ export const PollFeed = () => {
   const combinedEvents = useMemo(() => {
     return [...pollEvents].sort((a, b) => b.created_at - a.created_at);
   }, [pollEvents]);
+
+  // Request WoT report check for all visible polls and their authors
+  useEffect(() => {
+    if (combinedEvents.length > 0) {
+      requestReportCheck(combinedEvents.map((e) => e.id));
+      requestUserReportCheck(combinedEvents.map((e) => e.pubkey));
+    }
+  }, [combinedEvents, requestReportCheck, requestUserReportCheck]);
 
   useEffect(() => {
     if (feedSubscription) feedSubscription.unsubscribe();

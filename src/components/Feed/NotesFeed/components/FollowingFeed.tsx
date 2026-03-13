@@ -5,6 +5,7 @@ import RepostsCard from "./RepostedNoteCard";
 import { useFollowingNotes } from "../hooks/useFollowingNotes";
 import type { NoteMode } from "./index";
 import UnifiedFeed from "../../UnifiedFeed";
+import { useReports } from "../../../../hooks/useReports";
 
 const isRootNote = (event: { tags: string[][] }) =>
   !event.tags.some((t) => t[0] === "e");
@@ -13,6 +14,7 @@ const FollowingFeed = ({ noteMode }: { noteMode: NoteMode }) => {
   const { user, requestLogin } = useUserContext();
   const { notes, reposts, fetchNotes, refreshNotes, loadingMore, pendingCount, mergeNewNotes } =
     useFollowingNotes();
+  const { requestReportCheck, requestUserReportCheck } = useReports();
 
   // Merge notes and reposts for sorting by created_at
   // Each item: { note: Event, reposts: Event[] }
@@ -37,6 +39,14 @@ const FollowingFeed = ({ noteMode }: { noteMode: NoteMode }) => {
       })
       .sort((a, b) => b.latestActivity - a.latestActivity);
   }, [notes, reposts, noteMode]);
+
+  // Fetch WoT reports for the current batch of visible note ids and their authors
+  useEffect(() => {
+    if (mergedNotes.length > 0) {
+      requestReportCheck(mergedNotes.map((m) => m.note.id));
+      requestUserReportCheck(mergedNotes.map((m) => m.note.pubkey));
+    }
+  }, [mergedNotes, requestReportCheck, requestUserReportCheck]);
 
   useEffect(() => {
     if (user) {

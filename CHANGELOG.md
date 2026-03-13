@@ -1,3 +1,8 @@
+# 1.4.5
+
+- Add Reporting
+- Fix Ollama issues
+
 # 1.4.4
 
 - Revert AI setting to ollama directly

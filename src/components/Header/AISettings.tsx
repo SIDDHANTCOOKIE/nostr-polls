@@ -30,6 +30,13 @@ export const AISettings: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [debugLog, setDebugLog] = useState<string[]>([]);
+
+  const addLog = (msg: string) => {
+    const ts = new Date().toISOString().slice(11, 23);
+    console.log(`[AISettings] ${msg}`);
+    setDebugLog((prev) => [`[${ts}] ${msg}`, ...prev].slice(0, 30));
+  };
 
   // Load saved config on mount
   useEffect(() => {
@@ -37,24 +44,39 @@ export const AISettings: React.FC = () => {
       const stored = localStorage.getItem(CONFIG_KEY);
       if (stored) {
         const config = JSON.parse(stored);
-        if (config.url) setOllamaUrl(config.url);
+        if (config.url) {
+          addLog(`Loaded saved URL: ${config.url}`);
+          setOllamaUrl(config.url);
+        } else {
+          addLog("Saved config has no URL, using default");
+        }
+      } else {
+        addLog(`No saved config, using default: ${DEFAULT_URL}`);
       }
-    } catch {
-      // ignore
+    } catch (e: any) {
+      addLog(`Failed to load config: ${e?.message}`);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Auto-fetch models on native (no CORS issues)
   useEffect(() => {
-    if (isNative) fetchModels();
+    if (isNative) {
+      addLog("Native detected — auto-fetching models on mount");
+      fetchModels();
+    } else {
+      addLog("Not native — skipping auto-fetch");
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchModels = async () => {
     setLoading(true);
     setError(null);
+    addLog("Fetching models…");
     try {
       const response = await aiService.getModels();
+      addLog(`Response: success=${response.success}, error=${response.error ?? "none"}, models=${response.data?.models?.map((m: any) => m.name).join(", ") ?? "none"}`);
       if (
         response.success &&
         response.data &&
@@ -65,6 +87,7 @@ export const AISettings: React.FC = () => {
         setError(response.error || "Failed to fetch models.");
       }
     } catch (err: any) {
+      addLog(`Exception: ${err?.message}`);
       setError(err?.message || "Failed to communicate with Ollama.");
     } finally {
       setLoading(false);
@@ -256,6 +279,31 @@ export const AISettings: React.FC = () => {
               </Typography>
             </li>
           </ul>
+        </Box>
+      )}
+
+      {/* Debug Log */}
+      {debugLog.length > 0 && (
+        <Box mt={3}>
+          <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+            Debug log
+          </Typography>
+          <Box
+            p={1}
+            sx={{
+              bgcolor: "action.hover",
+              borderRadius: 1,
+              maxHeight: 160,
+              overflowY: "auto",
+              fontFamily: "monospace",
+            }}
+          >
+            {debugLog.map((line, i) => (
+              <Typography key={i} variant="caption" display="block" sx={{ fontSize: "0.7rem", lineHeight: 1.4 }}>
+                {line}
+              </Typography>
+            ))}
+          </Box>
         </Box>
       )}
     </Box>

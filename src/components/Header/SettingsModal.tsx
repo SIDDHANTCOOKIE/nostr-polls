@@ -3,6 +3,7 @@ import { useState } from "react";
 import { RelaySettings } from "./RelaySettings";
 import { AISettings } from "./AISettings";
 import { BlossomSettings } from "./BlossomSettings";
+import { ModerationSettings } from "./ModerationSettings";
 
 interface SettingsModalProps {
   open: boolean;
@@ -43,11 +44,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <Tab label="Relay Settings" />
           <Tab label="AI Settings" />
           <Tab label="Media" />
+          <Tab label="Moderation" />
         </Tabs>
 
         {tabIndex === 0 && <RelaySettings />}
         {tabIndex === 1 && <AISettings />}
         {tabIndex === 2 && <BlossomSettings />}
+        {tabIndex === 3 && <ModerationSettings />}
       </Box>
     </Modal>
   );
