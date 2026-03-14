@@ -48,6 +48,7 @@ import { ReportDialog } from "../Report/ReportDialog";
 import { ReportReason } from "../../contexts/reports-context";
 import FlagIcon from "@mui/icons-material/Flag";
 import OverlappingAvatars from "../Common/OverlappingAvatars";
+import { Nip05Badge } from "../Common/Nip05Badge";
 
 interface NotesProps {
   event: Event;
@@ -399,15 +400,21 @@ export const Notes: React.FC<NotesProps> = ({
             }
             title={
               <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <Typography>
-                  {profiles?.get(event.pubkey)?.name ||
-                    profiles?.get(event.pubkey)?.username ||
-                    profiles?.get(event.pubkey)?.nip05 ||
-                    (() => {
-                      const npub = nip19.npubEncode(event.pubkey);
-                      return npub.slice(0, 6) + "…" + npub.slice(-4);
-                    })()}
-                </Typography>
+                <Box>
+                  <Typography>
+                    {profiles?.get(event.pubkey)?.name ||
+                      profiles?.get(event.pubkey)?.username ||
+                      profiles?.get(event.pubkey)?.nip05 ||
+                      (() => {
+                        const npub = nip19.npubEncode(event.pubkey);
+                        return npub.slice(0, 6) + "…" + npub.slice(-4);
+                      })()}
+                  </Typography>
+                  <Nip05Badge
+                    nip05={profiles?.get(event.pubkey)?.nip05}
+                    pubkey={event.pubkey}
+                  />
+                </Box>
                 {user && !user.follows?.includes(event.pubkey) ? (
                   <Button onClick={addToContacts}>Follow</Button>
                 ) : null}

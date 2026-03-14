@@ -51,6 +51,7 @@ import { ReportDialog } from "../Report/ReportDialog";
 import { ReportReason } from "../../contexts/reports-context";
 import FlagIcon from "@mui/icons-material/Flag";
 import OverlappingAvatars from "../Common/OverlappingAvatars";
+import { Nip05Badge } from "../Common/Nip05Badge";
 import PollOptions from "./PollOptions";
 import { usePollResults } from "../../hooks/usePollResults";
 
@@ -73,6 +74,7 @@ const PollResponseForm: React.FC<PollResponseFormProps> = ({
     userResponse?.tags.filter((t) => t[0] === "response")?.map((t) => t[1]) || []
   );
   const [showResults, setShowResults] = useState<boolean>(false);
+  const [hasSubmitted, setHasSubmitted] = useState<boolean>(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isOverflowing, setIsOverflowing] = useState(false);
   const contentRef = useRef<HTMLDivElement | null>(null);
@@ -190,7 +192,6 @@ const PollResponseForm: React.FC<PollResponseFormProps> = ({
   };
 
   const displaySubmit = () => {
-    if (showResults) return false;
     if (pollExpiration && Number(pollExpiration) * 1000 < now.valueOf()) return false;
     return true;
   };
@@ -244,6 +245,7 @@ const PollResponseForm: React.FC<PollResponseFormProps> = ({
     const signedResponse = await signEvent(useEvent, responseUser!.privateKey);
     const eventRelays = pollEvent.tags.filter((t) => t[0] === "relay").map((t) => t[1]);
     pool.publish(eventRelays.length ? eventRelays : relays, signedResponse!);
+    setHasSubmitted(true);
     setShowResults(true);
   };
 
@@ -357,15 +359,21 @@ const PollResponseForm: React.FC<PollResponseFormProps> = ({
               }
               title={
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <Typography>
-                    {profiles?.get(pollEvent.pubkey)?.name ||
-                      profiles?.get(pollEvent.pubkey)?.username ||
-                      profiles?.get(pollEvent.pubkey)?.nip05 ||
-                      (() => {
-                        const npub = nip19.npubEncode(pollEvent.pubkey);
-                        return npub.slice(0, 6) + "…" + npub.slice(-4);
-                      })()}
-                  </Typography>
+                  <Box>
+                    <Typography>
+                      {profiles?.get(pollEvent.pubkey)?.name ||
+                        profiles?.get(pollEvent.pubkey)?.username ||
+                        profiles?.get(pollEvent.pubkey)?.nip05 ||
+                        (() => {
+                          const npub = nip19.npubEncode(pollEvent.pubkey);
+                          return npub.slice(0, 6) + "…" + npub.slice(-4);
+                        })()}
+                    </Typography>
+                    <Nip05Badge
+                      nip05={profiles?.get(pollEvent.pubkey)?.nip05}
+                      pubkey={pollEvent.pubkey}
+                    />
+                  </Box>
                   {user && !user.follows?.includes(pollEvent.pubkey) && (
                     <Button onClick={addToContacts}>Follow</Button>
                   )}
@@ -468,7 +476,7 @@ const PollResponseForm: React.FC<PollResponseFormProps> = ({
                   pollType={pollType as "singlechoice" | "multiplechoice"}
                   selectedResponses={responses}
                   onResponseChange={handleResponseChange}
-                  disabled={!!userResponse || showResults}
+                  disabled={!!(pollExpiration && Number(pollExpiration) * 1000 < now.valueOf())}
                   showResults={showResults}
                   results={results}
                   tags={pollEvent.tags}
@@ -513,7 +521,7 @@ const PollResponseForm: React.FC<PollResponseFormProps> = ({
               >
                 {displaySubmit() ? (
                   <Button type="submit" variant="contained" color="primary">
-                    Submit Response
+                    {userResponse || hasSubmitted ? "Update Vote" : "Submit Response"}
                   </Button>
                 ) : (
                   <div />

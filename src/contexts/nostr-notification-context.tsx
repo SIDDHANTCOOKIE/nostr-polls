@@ -43,6 +43,8 @@ export function NostrNotificationsProvider({
   );
   const [unreadCount, setUnreadCount] = useState(0);
   const [lastSeen, setLastSeen] = useState<number | null>(null);
+  // Ref so pushNotification always reads the current value without stale closure issues
+  const lastSeenRef = useRef<number | null>(null);
 
   const pollMap = useRef<Map<string, Event>>(new Map());
 
@@ -82,10 +84,11 @@ export function NostrNotificationsProvider({
       return next;
     });
 
-    if (!lastSeen || event.created_at > lastSeen) {
+    // Read from ref so this callback never goes stale regardless of when it was created
+    if (!lastSeenRef.current || event.created_at > lastSeenRef.current) {
       setUnreadCount((c) => c + 1);
     }
-  }, [lastSeen]);
+  }, []); // stable — no deps needed because we read from ref
 
   //
   // ────────────────────────────────────────────────────────────
@@ -170,11 +173,12 @@ export function NostrNotificationsProvider({
     hasStarted.current = true;
 
     (async () => {
-      // 1. load last seen
+      // 1. load last seen — update ref first so pushNotification sees it immediately
       const stored = loadLastSeen(user.pubkey);
       const since =
         stored ?? Math.floor((Date.now() - DEFAULT_LOOKBACK_MS) / 1000);
 
+      lastSeenRef.current = stored;
       setLastSeen(stored);
 
       // 2. fetch pollIds
@@ -191,7 +195,8 @@ export function NostrNotificationsProvider({
 
       // Subscription remains open (not closed) for real-time notifications
     })();
-  }, [user, relays, fetchPollIds, pushNotification]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, relays, fetchPollIds]); // pushNotification intentionally omitted — stable useCallback with no deps
 
   //
   // ────────────────────────────────────────────────────────────
@@ -201,6 +206,7 @@ export function NostrNotificationsProvider({
   const markAllAsRead = () => {
     if (!user) return;
     const ts = Math.floor(Date.now() / 1000);
+    lastSeenRef.current = ts;
     setLastSeen(ts);
     saveLastSeen(user.pubkey, ts);
     setUnreadCount(0);
@@ -215,6 +221,7 @@ export function NostrNotificationsProvider({
     if (lastSeen && event.created_at <= lastSeen) return;
 
     const nextLastSeen = event.created_at;
+    lastSeenRef.current = nextLastSeen;
     setLastSeen(nextLastSeen);
     saveLastSeen(user.pubkey, nextLastSeen);
 

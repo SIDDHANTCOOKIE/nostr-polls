@@ -12,18 +12,22 @@ import {
 } from "@mui/material";
 import LightbulbIcon from "@mui/icons-material/Lightbulb";
 import RefreshIcon from "@mui/icons-material/Refresh";
+import SyncIcon from "@mui/icons-material/Sync";
 import { useEffect, useState } from "react";
 import { useUserContext } from "../../hooks/useUserContext";
 import { useRelays } from "../../hooks/useRelays";
 import { nostrRuntime } from "../../singletons";
+import { useRelayHealth } from "../../contexts/RelayHealthContext";
 
 export const RelaySettings: React.FC = () => {
   const [relayConnectionMap, setRelayConnectionMap] = useState<
     Map<string, boolean>
   >(new Map());
   const [isChecking, setIsChecking] = useState<boolean>(false);
+  const [isReconnecting, setIsReconnecting] = useState<boolean>(false);
   const { relays, isUsingUserRelays } = useRelays();
   const { user } = useUserContext();
+  const { reconnect } = useRelayHealth();
 
   // Function to check relay connections using the existing SimplePool
   const checkConnections = async () => {
@@ -97,17 +101,35 @@ export const RelaySettings: React.FC = () => {
             color={isUsingUserRelays ? "success" : "default"}
           />
         </Box>
-        <Button
-          size="small"
-          variant="outlined"
-          onClick={() => checkConnections()}
-          disabled={isChecking}
-          startIcon={
-            isChecking ? <CircularProgress size={16} /> : <RefreshIcon />
-          }
-        >
-          Refresh Status
-        </Button>
+        <Box sx={{ display: "flex", gap: 1 }}>
+          <Button
+            size="small"
+            variant="contained"
+            onClick={async () => {
+              setIsReconnecting(true);
+              reconnect();
+              await checkConnections();
+              setIsReconnecting(false);
+            }}
+            disabled={isReconnecting}
+            startIcon={
+              isReconnecting ? <CircularProgress size={16} /> : <SyncIcon />
+            }
+          >
+            Reconnect
+          </Button>
+          <Button
+            size="small"
+            variant="outlined"
+            onClick={() => checkConnections()}
+            disabled={isChecking}
+            startIcon={
+              isChecking ? <CircularProgress size={16} /> : <RefreshIcon />
+            }
+          >
+            Refresh Status
+          </Button>
+        </Box>
       </Box>
 
       {relays.length > 0 ? (

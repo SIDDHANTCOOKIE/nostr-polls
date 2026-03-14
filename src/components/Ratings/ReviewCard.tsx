@@ -17,6 +17,7 @@ import { useUserContext } from "../../hooks/useUserContext";
 import { nostrRuntime } from "../../singletons";
 import { useRelays } from "../../hooks/useRelays";
 import { Link as RouterLink } from "react-router-dom";
+import { Nip05Badge } from "../Common/Nip05Badge";
 
 interface Props {
   event: Event;
@@ -150,6 +151,7 @@ const ReviewCard: React.FC<Props> = ({ event }) => {
             <Typography variant="subtitle1" fontWeight={600}>
               {displayName}
             </Typography>
+            <Nip05Badge nip05={reviewUser?.nip05} pubkey={pubkey} />
             <Typography variant="body2" color="text.secondary">
               {rating.toFixed(1)} ★
             </Typography>

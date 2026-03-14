@@ -22,6 +22,7 @@ import { EventTemplate, nip19 } from "nostr-tools";
 import { useNavigate } from "react-router-dom";
 import { signEvent } from "../../nostr";
 import { pool } from "../../singletons";
+import { Nip05Badge } from "../Common/Nip05Badge";
 
 interface ContactsModalProps {
   open: boolean;
@@ -180,17 +181,7 @@ export const ContactsModal: React.FC<ContactsModalProps> = ({
                         {displayName}
                       </Typography>
                       {profile?.nip05 && (
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          sx={{
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {profile.nip05}
-                        </Typography>
+                        <Nip05Badge nip05={profile.nip05} pubkey={pubkey} />
                       )}
                     </Box>
                     <Button

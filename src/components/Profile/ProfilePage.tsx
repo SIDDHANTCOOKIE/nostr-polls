@@ -34,6 +34,7 @@ import DownloadIcon from "@mui/icons-material/Download";
 import MailIcon from "@mui/icons-material/Mail";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { useNotification } from "../../contexts/notification-context";
+import { Nip05Badge } from "../Common/Nip05Badge";
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -376,9 +377,7 @@ const ProfilePage: React.FC = () => {
               </Box>
 
               {profile?.nip05 && (
-                <Typography variant="body2" color="text.secondary">
-                  @{profile.nip05}
-                </Typography>
+                <Nip05Badge nip05={profile.nip05} pubkey={pubkey} variant="body2" />
               )}
 
               <Box
