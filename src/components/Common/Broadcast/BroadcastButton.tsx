@@ -14,7 +14,7 @@ import { waitForPublish } from "../../../utils/publish";
 type BroadcastState = "idle" | "broadcasting" | "done";
 
 export const BroadcastButton: React.FC<{ event: Event }> = ({ event }) => {
-  const { relays } = useRelays();
+  const { writeRelays } = useRelays();
   const [state, setState] = useState<BroadcastState>("idle");
   const [result, setResult] = useState<{ accepted: number; total: number } | null>(null);
 
@@ -23,10 +23,10 @@ export const BroadcastButton: React.FC<{ event: Event }> = ({ event }) => {
     if (state === "broadcasting") return;
     setState("broadcasting");
     try {
-      const res = await waitForPublish(relays, event);
+      const res = await waitForPublish(writeRelays, event);
       setResult({ accepted: res.accepted, total: res.total });
     } catch {
-      setResult({ accepted: 0, total: relays.length });
+      setResult({ accepted: 0, total: writeRelays.length });
     } finally {
       setState("done");
     }

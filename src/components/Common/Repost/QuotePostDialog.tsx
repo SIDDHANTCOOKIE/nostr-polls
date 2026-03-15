@@ -16,7 +16,7 @@ import { useUserContext } from "../../../hooks/useUserContext";
 import { useRelays } from "../../../hooks/useRelays";
 import { useNotification } from "../../../contexts/notification-context";
 import { signEvent } from "../../../nostr";
-import { waitForPublish } from "../../../utils/publish";
+import { publishWithGossip } from "../../../utils/publish";
 import { extractHashtags } from "../../../utils/common";
 import { NOSTR_EVENT_KINDS } from "../../../constants/nostr";
 import MentionTextArea, {
@@ -41,7 +41,7 @@ const QuotePostDialog: React.FC<QuotePostDialogProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const { user } = useUserContext();
-  const { relays } = useRelays();
+  const { relays, writeRelays } = useRelays();
   const { showNotification } = useNotification();
 
   const neventId = useMemo(() => {
@@ -88,7 +88,7 @@ const QuotePostDialog: React.FC<QuotePostDialogProps> = ({
         showNotification("Failed to sign quote post", "error");
         return;
       }
-      const result = await waitForPublish(relays, signedEvent);
+      const result = await publishWithGossip(writeRelays, signedEvent);
       if (result.ok) {
         showNotification(`Quote post published to ${result.accepted}/${result.total} relays`, "success");
         setContent("");

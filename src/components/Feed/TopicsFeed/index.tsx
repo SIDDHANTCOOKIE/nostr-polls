@@ -5,6 +5,7 @@ import { useNavigate, Outlet, useParams } from "react-router-dom";
 import {
   Typography,
   Box,
+  Chip,
   CircularProgress,
   IconButton,
   Dialog,
@@ -22,6 +23,7 @@ import { useListContext } from "../../../hooks/useListContext";
 import MyTopicsFeed from "./MyTopicsFeed";
 import { useUserContext } from "../../../hooks/useUserContext";
 import { useSubNav } from "../../../contexts/SubNavContext";
+import { useGossipContext } from "../../../contexts/GossipContext";
 
 const TopicsFeed: React.FC = () => {
   const [activeTab, setActiveTab] = useState<"discover" | "myTopics" | "interests">(() => {
@@ -42,6 +44,7 @@ const TopicsFeed: React.FC = () => {
   const subRef = useRef<ReturnType<typeof nostrRuntime.subscribe> | null>(null);
   const isMounted = useRef(true);
   const { setItems, clearItems } = useSubNav();
+  const { networkInterests } = useGossipContext();
 
   const handleTabChange = useCallback((tab: "discover" | "myTopics" | "interests") => {
     localStorage.setItem("pollerama:lastTopicsTab", tab);
@@ -271,13 +274,38 @@ const TopicsFeed: React.FC = () => {
           )
         ) : (
           // Show list of topic cards for discover / myTopics
-          <Virtuoso
-            data={displayTags}
-            itemContent={(index, tag) => (
-              <TopicCard tag={tag} metadataEvent={metadataMap.get(tag)} />
+          <Box sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
+            {/* Network interests from gossip relays — shown in discover tab only */}
+            {activeTab === "discover" && networkInterests.length > 0 && (
+              <Box sx={{ px: 1, pt: 1, pb: 0.5, flexShrink: 0 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
+                  Popular in your network
+                </Typography>
+                <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
+                  {networkInterests.slice(0, 20).map((interest) => (
+                    <Chip
+                      key={interest}
+                      label={`#${interest}`}
+                      size="small"
+                      variant="outlined"
+                      color="primary"
+                      clickable
+                      onClick={() => navigate(`/feeds/topics/${interest}`)}
+                    />
+                  ))}
+                </Box>
+              </Box>
             )}
-            style={{ height: "100%", width: "100%" }}
-          />
+            <Box sx={{ flexGrow: 1, minHeight: 0 }}>
+              <Virtuoso
+                data={displayTags}
+                itemContent={(index, tag) => (
+                  <TopicCard tag={tag} metadataEvent={metadataMap.get(tag)} />
+                )}
+                style={{ height: "100%", width: "100%" }}
+              />
+            </Box>
+          </Box>
         )}
       </Box>
 

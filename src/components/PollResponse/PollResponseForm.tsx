@@ -99,7 +99,7 @@ const PollResponseForm: React.FC<PollResponseFormProps> = ({
   const { showNotification } = useNotification();
   const { profiles, fetchUserProfileThrottled } = useAppContext();
   const { user, setUser, requestLogin } = useUserContext();
-  const { relays } = useRelays();
+  const { relays, writeRelays } = useRelays();
   const { fetchLatestContactList } = useListContext();
   const { reportEvent, reportUser, isReportedByMe, getWoTReporters, wotReportThreshold, requestUserReportCheck } = useReports();
 
@@ -151,7 +151,7 @@ const PollResponseForm: React.FC<PollResponseFormProps> = ({
     setIsBroadcasting(true);
     setBroadcastResult(null);
     try {
-      const res = await waitForPublish(relays, pollEvent);
+      const res = await waitForPublish(writeRelays, pollEvent);
       setBroadcastResult({ accepted: res.accepted, total: res.total });
     } catch {
       setBroadcastResult({ accepted: 0, total: relays.length });
@@ -175,7 +175,7 @@ const PollResponseForm: React.FC<PollResponseFormProps> = ({
       content: contactEvent?.content || "",
     };
     const signed = await signEvent(newEvent);
-    pool.publish(relays, signed);
+    pool.publish(writeRelays, signed);
     setUser({ pubkey: signed.pubkey, ...user, follows: [...pTags, pubkeyToAdd] });
   };
 

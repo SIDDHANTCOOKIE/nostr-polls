@@ -2,6 +2,7 @@ import { Event, EventTemplate, Filter, finalizeEvent, SimplePool } from "nostr-t
 import { hexToBytes } from "@noble/hashes/utils";
 import { nostrRuntime } from "../singletons";
 import { signerManager } from "../singletons/Signer/SignerManager";
+import { getCachedOutboxRelays, getOutboxRelays } from "./OutboxService";
 
 export const defaultRelays = [
   "wss://relay.damus.io/",
@@ -33,8 +34,18 @@ export const fetchUserProfile = async (
   pubkey: string,
   relays: string[] = defaultRelays
 ) => {
-  let result = await nostrRuntime.fetchOne(relays, { kinds: [0], authors: [pubkey] });
-  return result;
+  // Use cached outbox relays if available (no extra round-trip on cache hit)
+  const cachedOutbox = getCachedOutboxRelays(pubkey);
+  const fetchRelays = cachedOutbox.length > 0
+    ? Array.from(new Set([...cachedOutbox, ...relays]))
+    : relays;
+
+  // Trigger background fetch of outbox relays so future calls benefit
+  if (cachedOutbox.length === 0) {
+    getOutboxRelays(pubkey); // fire-and-forget
+  }
+
+  return nostrRuntime.fetchOne(fetchRelays, { kinds: [0], authors: [pubkey] });
 };
 
 export async function parseContacts(contactList: Event) {

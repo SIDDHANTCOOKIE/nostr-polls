@@ -26,6 +26,7 @@ import { MetadataProvider } from "./hooks/MetadataProvider";
 import { NotificationProvider } from "./contexts/notification-context";
 import { RelayProvider } from "./contexts/relay-context";
 import { RelayHealthProvider } from "./contexts/RelayHealthContext";
+import { GossipProvider } from "./contexts/GossipContext";
 import { NostrNotificationsProvider } from "./contexts/nostr-notification-context";
 import { DMProvider } from "./contexts/dm-context";
 import { ReportsProvider } from "./contexts/reports-context";
@@ -199,6 +200,7 @@ const App: React.FC = () => {
           <UserProvider>
             <RelayProvider>
               <RelayHealthProvider>
+              <GossipProvider>
               <DMProvider>
               <NostrNotificationsProvider>
                 <TranslationBatchProvider>
@@ -225,6 +227,7 @@ const App: React.FC = () => {
                 </TranslationBatchProvider>
               </NostrNotificationsProvider>
               </DMProvider>
+              </GossipProvider>
               </RelayHealthProvider>
             </RelayProvider>
           </UserProvider>

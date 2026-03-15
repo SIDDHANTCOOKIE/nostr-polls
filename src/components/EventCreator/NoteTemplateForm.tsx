@@ -24,7 +24,7 @@ import VisibilityIcon from "@mui/icons-material/Visibility";
 import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
 import AutoFixHighIcon from "@mui/icons-material/AutoFixHigh";
 import { NotePreview } from "./NotePreview";
-import { waitForPublish } from "../../utils/publish";
+import { publishWithGossip } from "../../utils/publish";
 import MentionTextArea, { extractMentionTags } from "./MentionTextArea";
 import { PostEnhancementDialog } from "./PostEnhancementDialog";
 import { aiService } from "../../services/ai-service";
@@ -52,7 +52,7 @@ const NoteTemplateForm: React.FC<{
   useEffect(() => { eventContentRef.current = eventContent; }, [eventContent]);
   const { showNotification } = useNotification();
   const { user } = useUserContext();
-  const { relays } = useRelays();
+  const { relays, writeRelays } = useRelays();
   const { aiSettings } = useAppContext();
   const navigate = useNavigate();
 
@@ -147,7 +147,7 @@ const NoteTemplateForm: React.FC<{
         showNotification(NOTIFICATION_MESSAGES.NOTE_SIGN_FAILED, "error");
         return;
       }
-      const result = await waitForPublish(relays, signedEvent);
+      const result = await publishWithGossip(writeRelays, signedEvent);
       setIsSubmitting(false);
       if (result.ok) {
         showNotification(

@@ -12,6 +12,7 @@ import PollResponseForm from "../PollResponse/PollResponseForm";
 import ReplayIcon from "@mui/icons-material/Replay";
 import OverlappingAvatars from "../Common/OverlappingAvatars";
 import { useSubNav } from "../../contexts/SubNavContext";
+import { getRelaysForAuthors, prefetchOutboxRelays } from "../../nostr/OutboxService";
 
 const KIND_POLL = 1068;
 const KIND_RESPONSE = [1018, 1070];
@@ -151,8 +152,9 @@ export const PollFeed = () => {
 
   // Helper to subscribe - runtime handles chunking automatically for large author lists
   const subscribeWithAuthors = useCallback(
-    (filters: Filter[], onAllChunksComplete?: () => void) => {
-      const handle = nostrRuntime.subscribe(relays, filters, {
+    (filters: Filter[], onAllChunksComplete?: () => void, relayOverride?: string[]) => {
+      const targetRelays = relayOverride ?? relays;
+      const handle = nostrRuntime.subscribe(targetRelays, filters, {
         onEvent: handleIncomingEvent,
         onEose: () => {
           onAllChunksComplete?.();
@@ -184,9 +186,13 @@ export const PollFeed = () => {
       "#k": ["1068"],
     };
 
+    let gossipRelays: string[] | undefined;
     if (eventSource === "following" && user?.follows?.length) {
-      filterPoll.authors = user.follows;
-      filterResposts.authors = user.follows;
+      const authorsList = user.follows;
+      filterPoll.authors = authorsList;
+      filterResposts.authors = authorsList;
+      prefetchOutboxRelays(authorsList);
+      gossipRelays = getRelaysForAuthors(relays, authorsList);
     }
     if (
       eventSource === "webOfTrust" &&
@@ -196,11 +202,13 @@ export const PollFeed = () => {
       const authors = Array.from(user.webOfTrust);
       filterPoll.authors = authors;
       filterResposts.authors = authors;
+      prefetchOutboxRelays(authors);
+      gossipRelays = getRelaysForAuthors(relays, authors);
     }
 
     const closer = subscribeWithAuthors([filterPoll, filterResposts], () => {
       setLoadingMore(false);
-    });
+    }, gossipRelays);
     setFeedSubscription(closer);
   };
 
@@ -225,9 +233,13 @@ export const PollFeed = () => {
       "#k": ["1068"],
     };
 
+    let gossipRelays: string[] | undefined;
     if (eventSource === "following" && user?.follows?.length) {
-      filterPolls.authors = user.follows;
-      filterResposts.authors = user.follows;
+      const authorsList = user.follows;
+      filterPolls.authors = authorsList;
+      filterResposts.authors = authorsList;
+      prefetchOutboxRelays(authorsList);
+      gossipRelays = getRelaysForAuthors(relays, authorsList);
     }
     if (
       eventSource === "webOfTrust" &&
@@ -237,11 +249,13 @@ export const PollFeed = () => {
       const authors = Array.from(user.webOfTrust);
       filterPolls.authors = authors;
       filterResposts.authors = authors;
+      prefetchOutboxRelays(authors);
+      gossipRelays = getRelaysForAuthors(relays, authors);
     }
 
     const closer = subscribeWithAuthors([filterPolls, filterResposts], () => {
       setLoadingInitial(false);
-    });
+    }, gossipRelays);
 
     return closer;
   };

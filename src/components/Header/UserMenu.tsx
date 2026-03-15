@@ -26,7 +26,7 @@ export const UserMenu: React.FC = () => {
   const [showContactsModal, setShowContactsModal] = React.useState(false);
   const { user } = useUserContext();
   const navigate = useNavigate();
-  const { connected, total } = useRelayHealth();
+  const { connected, total, gossipConnected, gossipTotal } = useRelayHealth();
 
   const handleLogOut = () => {
     signerManager.logout();
@@ -77,14 +77,27 @@ export const UserMenu: React.FC = () => {
         <ListItem key="relay-health">
           <Box sx={{ display: "flex", alignItems: "center", gap: 1, py: 0.5 }}>
             <WifiIcon fontSize="small" color={connected === total && total > 0 ? "success" : connected > 0 ? "warning" : "error"} />
-            <Tooltip title={`${connected} of ${total} relays connected`}>
-              <Chip
-                size="small"
-                label={total > 0 ? `${connected}/${total} relays` : "no relays"}
-                color={connected === total && total > 0 ? "success" : connected > 0 ? "warning" : "error"}
-                variant="outlined"
-              />
-            </Tooltip>
+            <Box>
+              <Tooltip title={`Own relays: ${connected}/${total} connected`}>
+                <Chip
+                  size="small"
+                  label={total > 0 ? `${connected}/${total} own` : "no relays"}
+                  color={connected === total && total > 0 ? "success" : connected > 0 ? "warning" : "error"}
+                  variant="outlined"
+                  sx={{ mr: 0.5 }}
+                />
+              </Tooltip>
+              {gossipTotal > 0 && (
+                <Tooltip title={`Gossip relays: ${gossipConnected}/${gossipTotal} active`}>
+                  <Chip
+                    size="small"
+                    label={`${gossipConnected}/${gossipTotal} gossip`}
+                    color={gossipConnected > 0 ? "info" : "default"}
+                    variant="outlined"
+                  />
+                </Tooltip>
+              )}
+            </Box>
           </Box>
         </ListItem>
         {user

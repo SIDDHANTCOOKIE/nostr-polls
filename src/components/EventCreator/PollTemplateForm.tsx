@@ -34,7 +34,7 @@ import { signEvent } from "../../nostr";
 import { useRelays } from "../../hooks/useRelays";
 import { PollPreview } from "./PollPreview";
 import { Event } from "nostr-tools";
-import { waitForPublish } from "../../utils/publish";
+import { publishWithGossip } from "../../utils/publish";
 import { extractHashtags } from "../../utils/common";
 
 const generateOptionId = (): string => {
@@ -79,7 +79,7 @@ const PollTemplateForm: React.FC<{
 
   const { showNotification } = useNotification();
   const { user } = useUserContext();
-  const { relays } = useRelays();
+  const { relays, writeRelays } = useRelays();
   const navigate = useNavigate();
   const now = dayjs();
 
@@ -141,7 +141,7 @@ const PollTemplateForm: React.FC<{
         return;
       }
 
-      const result = await waitForPublish(relays, signedEvent);
+      const result = await publishWithGossip(writeRelays, signedEvent);
       setIsSubmitting(false);
       if (result.ok) {
         showNotification(

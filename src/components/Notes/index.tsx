@@ -66,7 +66,7 @@ export const Notes: React.FC<NotesProps> = ({
   const navigate = useNavigate();
   const { profiles, fetchUserProfileThrottled, aiSettings } = useAppContext();
   let { user, requestLogin, setUser } = useUserContext();
-  let { relays } = useRelays();
+  let { relays, writeRelays } = useRelays();
   let { fetchLatestContactList } = useListContext();
   const replyingTo = event.tags.findLast((t) => t[0] === "e")?.[1] || null;
   const isValidHex = (s: string | null) => s && s.length === 64 && /^[0-9a-f]+$/i.test(s);
@@ -104,7 +104,7 @@ export const Notes: React.FC<NotesProps> = ({
     setIsBroadcasting(true);
     setBroadcastResult(null);
     try {
-      const res = await waitForPublish(relays, event);
+      const res = await waitForPublish(writeRelays, event);
       setBroadcastResult({ accepted: res.accepted, total: res.total });
     } catch {
       setBroadcastResult({ accepted: 0, total: relays.length });
@@ -194,6 +194,11 @@ export const Notes: React.FC<NotesProps> = ({
       target.isContentEditable ||
       target.closest("a")
     ) {
+      return;
+    }
+    // On touch devices, don't intercept — the long-press context menu is how
+    // users start text selection. The ⋮ button provides the same actions.
+    if (navigator.maxTouchPoints > 0) {
       return;
     }
     event.preventDefault();

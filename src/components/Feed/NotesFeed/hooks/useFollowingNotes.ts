@@ -3,6 +3,7 @@ import { Event, Filter } from "nostr-tools";
 import { useRelays } from "../../../../hooks/useRelays";
 import { nostrRuntime } from "../../../../singletons";
 import { useUserContext } from "../../../../hooks/useUserContext";
+import { getRelaysForAuthors, prefetchOutboxRelays } from "../../../../nostr/OutboxService";
 
 export const useFollowingNotes = () => {
   const [loadingMore, setLoadingMore] = useState(false);
@@ -56,8 +57,9 @@ export const useFollowingNotes = () => {
       const currentEvents = nostrRuntime.query({ kinds: [1], authors });
       if (!currentEvents.length) return;
       const since = Math.max(...currentEvents.map((e) => e.created_at));
+      const gossipRelays = getRelaysForAuthors(relays, authors);
       const handle = nostrRuntime.subscribe(
-        relays,
+        gossipRelays,
         [{ kinds: [1], authors, since: since + 1, limit: 20 }],
         {
           onEvent: () => setPendingCount((c) => c + 1),
@@ -82,18 +84,24 @@ export const useFollowingNotes = () => {
     missingNotesRef.current.clear();
     if (!idsToFetch.length || !relays?.length) return;
 
+    const authors = user?.follows ? Array.from(user.follows) : [];
+    const gossipRelays = authors.length > 0 ? getRelaysForAuthors(relays, authors) : relays;
+
     nostrRuntime
-      .querySync(relays, { kinds: [1], ids: idsToFetch })
+      .querySync(gossipRelays, { kinds: [1], ids: idsToFetch })
       .then((events) => {
         if (events.length > 0) setVersion((v) => v + 1);
       });
-  }, [relays]);
+  }, [relays, user?.follows]);
 
   // Load older notes (pagination down) or initial load
   const fetchNotes = async () => {
     if (!user?.follows?.length || loadingMore) return;
     setLoadingMore(true);
     const authors = Array.from(user.follows);
+
+    prefetchOutboxRelays(authors); // fire-and-forget, populates cache for gossip model
+    const gossipRelays = getRelaysForAuthors(relays, authors);
 
     const noteFilter: Filter = { kinds: [1], authors, limit: 10 };
     const currentNotes = notes();
@@ -113,7 +121,7 @@ export const useFollowingNotes = () => {
     }
 
     let hasNewEvents = false;
-    const handle = nostrRuntime.subscribe(relays, [noteFilter, repostFilter], {
+    const handle = nostrRuntime.subscribe(gossipRelays, [noteFilter, repostFilter], {
       onEvent: (event: Event) => {
         if (event.kind === 6) {
           const originalNoteId = event.tags.find((t) => t[0] === "e")?.[1];
