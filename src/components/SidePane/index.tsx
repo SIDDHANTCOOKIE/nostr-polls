@@ -14,6 +14,7 @@ import HowToVoteIcon from "@mui/icons-material/HowToVote";
 import TagIcon from "@mui/icons-material/Tag";
 import ArticleIcon from "@mui/icons-material/Article";
 import MovieIcon from "@mui/icons-material/Movie";
+import PeopleIcon from "@mui/icons-material/People";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import { SvgIconComponent } from "@mui/icons-material";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -38,25 +39,33 @@ const MOBILE_SUB_ITEMS: Record<string, { key: string; label: string }[]> = {
     { key: "myTopics", label: "Topics" },
     { key: "discover", label: "Discover" },
   ],
+  "follow-packs": [
+    { key: "global", label: "Global" },
+    { key: "following", label: "Following" },
+    { key: "bookmarked", label: "Bookmarked" },
+  ],
 };
 
 const FEED_STORAGE_KEYS: Record<string, string> = {
   polls: "pollerama:pollSource",
   notes: "pollerama:lastNotesTab",
   topics: "pollerama:lastTopicsTab",
+  "follow-packs": "pollerama:followPacksSource",
 };
 
 const FEED_DEFAULT_SUB: Record<string, string> = {
   polls: "global",
   notes: "discover",
   topics: "interests",
+  "follow-packs": "global",
 };
 
 const feedOptions: { value: string; label: string; Icon: SvgIconComponent }[] = [
-  { value: "polls",  label: "Polls",  Icon: HowToVoteIcon },
-  { value: "topics", label: "Topics", Icon: TagIcon },
-  { value: "notes",  label: "Notes",  Icon: ArticleIcon },
-  { value: "movies", label: "Movies", Icon: MovieIcon },
+  { value: "polls",        label: "Polls",        Icon: HowToVoteIcon },
+  { value: "topics",       label: "Topics",       Icon: TagIcon },
+  { value: "notes",        label: "Notes",        Icon: ArticleIcon },
+  { value: "movies",       label: "Movies",       Icon: MovieIcon },
+  { value: "follow-packs", label: "Follow Packs", Icon: PeopleIcon },
 ];
 
 interface NavSidebarProps {

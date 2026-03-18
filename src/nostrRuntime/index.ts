@@ -180,7 +180,8 @@ export class NostrRuntime {
     const seen = new Set<string>();
 
     return new Promise((resolve) => {
-      const handle = this.subscriptionManager.subscribe(
+      let handle: SubscriptionHandle;
+      handle = this.subscriptionManager.subscribe(
         relays,
         [filter],
         (event) => {

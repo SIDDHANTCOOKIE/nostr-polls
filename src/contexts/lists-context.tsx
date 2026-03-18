@@ -19,6 +19,10 @@ interface ListContextInterface {
   myTopics: Set<string> | undefined;
   addTopicToMyTopics: (topic: string) => Promise<void>;
   removeTopicFromMyTopics: (topic: string) => Promise<void>;
+  bookmarkedPackKeys: Set<string>;
+  bookmarkFollowPack: (packEvent: Event) => Promise<void>;
+  unbookmarkFollowPack: (packEvent: Event) => Promise<void>;
+  fetchAndHydratePacks: (adrefs: string[]) => void;
 }
 
 export const ListContext = createContext<ListContextInterface | null>(null);
@@ -26,6 +30,8 @@ export const ListContext = createContext<ListContextInterface | null>(null);
 export function ListProvider({ children }: { children: ReactNode }) {
   const [lists, setLists] = useState<Map<string, Event> | undefined>();
   const [selectedList, setSelectedList] = useState<string | undefined>();
+  const [bookmarkedPackKeys, setBookmarkedPackKeys] = useState<Set<string>>(new Set());
+  const [bookmarks10003, setBookmarks10003] = useState<Event | null>(null);
   const [myTopics, setMyTopics] = useState<Set<string> | undefined>();
   const [myTopicsEvent, setMyTopicsEvent] = useState<
     Event | null | undefined
@@ -123,14 +129,120 @@ export function ListProvider({ children }: { children: ReactNode }) {
   };
 
   const fetchLists = () => {
-    let followSetFilter = {
-      kinds: [30000],
-      limit: 100,
-      authors: [user!.pubkey],
-    };
-    nostrRuntime.subscribe(relays, [followSetFilter], {
+    // Packs I created
+    nostrRuntime.subscribe(relays, [{ kinds: [39089], limit: 100, authors: [user!.pubkey] }], {
       onEvent: handleListEvent,
     });
+    // Packs I'm mentioned in
+    nostrRuntime.subscribe(relays, [{ kinds: [39089], limit: 100, "#p": [user!.pubkey] }], {
+      onEvent: handleListEvent,
+    });
+  };
+
+  const fetchAndHydratePacks = (adrefs: string[]) => {
+    adrefs.forEach((adref) => {
+      const parts = adref.split(":");
+      const pubkey = parts[1];
+      const identifier = parts.slice(2).join(":");
+      if (!pubkey) return;
+      nostrRuntime.subscribe(
+        relays,
+        [{ kinds: [39089], authors: [pubkey], "#d": [identifier], limit: 1 }],
+        { onEvent: handleListEvent }
+      );
+    });
+  };
+
+  const processBookmarksEvent = async (event: Event) => {
+    let adrefs: string[] = [];
+
+    // Decrypt private tags from content (NIP-44 encrypted to self)
+    if (event.content) {
+      try {
+        const signer = await signerManager.getSigner();
+        const pubkey = await signer.getPublicKey();
+        const decrypted = await signer.nip44Decrypt!(pubkey, event.content);
+        const privateTags: string[][] = JSON.parse(decrypted);
+        if (Array.isArray(privateTags)) {
+          adrefs.push(
+            ...privateTags
+              .filter((t) => Array.isArray(t) && t[0] === "a" && t[1]?.startsWith("39089:"))
+              .map((t) => t[1])
+          );
+        }
+      } catch {
+        // Fall through to public tags
+      }
+    }
+
+    // Also read any unencrypted public tags (backwards compat)
+    const publicAdrefs = event.tags
+      .filter((t) => t[0] === "a" && t[1]?.startsWith("39089:"))
+      .map((t) => t[1]);
+    const allAdrefs = Array.from(new Set([...adrefs, ...publicAdrefs]));
+
+    setBookmarkedPackKeys(new Set(allAdrefs));
+    fetchAndHydratePacks(allAdrefs);
+  };
+
+  const fetchBookmarks = () => {
+    if (!user) return;
+    nostrRuntime.subscribe(relays, [{ kinds: [10003], authors: [user.pubkey], limit: 1 }], {
+      onEvent: (event) => {
+        setBookmarks10003((prev) => {
+          if (!prev || event.created_at > prev.created_at) {
+            processBookmarksEvent(event);
+            return event;
+          }
+          return prev;
+        });
+      },
+    });
+  };
+
+  const buildAndPublishBookmarks = async (adrefs: string[]): Promise<Event> => {
+    const signer = await signerManager.getSigner();
+    const pubkey = await signer.getPublicKey();
+    const privateTags = adrefs.map((a) => ["a", a]);
+    const encrypted = await signer.nip44Encrypt!(pubkey, JSON.stringify(privateTags));
+
+    // Preserve all existing public tags except our own 39089 a-tags (which are now private).
+    // This ensures we don't wipe pre-existing bookmarks (notes, URLs, hashtags, etc.)
+    // added by other clients.
+    const existingPublicTags = (bookmarks10003?.tags ?? []).filter(
+      (t) => !(t[0] === "a" && t[1]?.startsWith("39089:"))
+    );
+
+    const template: EventTemplate = {
+      kind: 10003,
+      created_at: Math.floor(Date.now() / 1000),
+      tags: existingPublicTags,
+      content: encrypted,
+    };
+    const signed = await signer.signEvent(template);
+    await Promise.allSettled(pool.publish(relays, signed));
+    return signed;
+  };
+
+  const bookmarkFollowPack = async (packEvent: Event): Promise<void> => {
+    const identifier = packEvent.tags.find((t) => t[0] === "d")?.[1] || "";
+    const adref = `39089:${packEvent.pubkey}:${identifier}`;
+    const current = Array.from(bookmarkedPackKeys);
+    if (current.includes(adref)) return;
+    const newAdrefs = [...current, adref];
+    const signed = await buildAndPublishBookmarks(newAdrefs);
+    setBookmarks10003(signed);
+    setBookmarkedPackKeys(new Set(newAdrefs));
+    handleListEvent(packEvent);
+  };
+
+  const unbookmarkFollowPack = async (packEvent: Event): Promise<void> => {
+    const identifier = packEvent.tags.find((t) => t[0] === "d")?.[1] || "";
+    const adref = `39089:${packEvent.pubkey}:${identifier}`;
+    const newAdrefs = Array.from(bookmarkedPackKeys).filter((k) => k !== adref);
+    const signed = await buildAndPublishBookmarks(newAdrefs);
+    setBookmarks10003(signed);
+    setBookmarkedPackKeys(new Set(newAdrefs));
   };
 
   const subscribeToContacts = () => {
@@ -280,6 +392,7 @@ export function ListProvider({ children }: { children: ReactNode }) {
       if (!user.follows || user.follows.length === 0) fetchContacts();
       if (!user.webOfTrust || user.webOfTrust.size === 0) subscribeToContacts();
       if (!myTopics) fetchMyTopics();
+      if (bookmarkedPackKeys.size === 0 && !bookmarks10003) fetchBookmarks();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lists, myTopics, user]);
@@ -458,6 +571,10 @@ export function ListProvider({ children }: { children: ReactNode }) {
           myTopics,
           addTopicToMyTopics,
           removeTopicFromMyTopics,
+          bookmarkedPackKeys,
+          bookmarkFollowPack,
+          unbookmarkFollowPack,
+          fetchAndHydratePacks,
         }}
       >
         {children}

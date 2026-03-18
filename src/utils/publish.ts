@@ -4,10 +4,21 @@ import { getNip65InboxRelays } from "../nostr/OutboxService";
 
 const PUBLISH_TIMEOUT_MS = 5000;
 
+export interface RelayPublishResult {
+  relay: string;
+  status: "accepted" | "rejected" | "timeout";
+  /** Rejection reason from the relay, or undefined on success/timeout */
+  message?: string;
+  /** Milliseconds from publish start to relay response */
+  latencyMs: number;
+}
+
 export interface PublishResult {
   ok: boolean;
   accepted: number;
   total: number;
+  /** Per-relay breakdown for diagnostic display */
+  relayResults: RelayPublishResult[];
 }
 
 export async function waitForPublish(
@@ -15,20 +26,40 @@ export async function waitForPublish(
   event: Event
 ): Promise<PublishResult> {
   const total = relays.length;
-  if (total === 0) return { ok: false, accepted: 0, total: 0 };
+  if (total === 0) return { ok: false, accepted: 0, total: 0, relayResults: [] };
 
   const promises = pool.publish(relays, event);
+  const globalStart = Date.now();
 
-  const timeout = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error("timeout")), PUBLISH_TIMEOUT_MS)
+  // Wrap each promise individually to capture per-relay latency.
+  // Each inner promise always resolves (never throws) so Promise.all works cleanly.
+  const relayResults: RelayPublishResult[] = await Promise.all(
+    promises.map((p, i) => {
+      const relayStart = Date.now();
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("timeout")), PUBLISH_TIMEOUT_MS - (Date.now() - globalStart))
+      );
+      return Promise.race([p, timeout])
+        .then((msg): RelayPublishResult => ({
+          relay: relays[i],
+          status: "accepted",
+          message: msg || undefined,
+          latencyMs: Date.now() - relayStart,
+        }))
+        .catch((err): RelayPublishResult => {
+          const msg = err instanceof Error ? err.message : String(err);
+          return {
+            relay: relays[i],
+            status: msg === "timeout" ? "timeout" : "rejected",
+            message: msg === "timeout" ? undefined : msg,
+            latencyMs: Date.now() - relayStart,
+          };
+        });
+    })
   );
 
-  const results = await Promise.allSettled(
-    promises.map((p) => Promise.race([p, timeout]))
-  );
-
-  const accepted = results.filter((r) => r.status === "fulfilled").length;
-  return { ok: accepted > 0, accepted, total };
+  const accepted = relayResults.filter((r) => r.status === "accepted").length;
+  return { ok: accepted > 0, accepted, total, relayResults };
 }
 
 /**

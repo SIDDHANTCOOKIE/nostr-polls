@@ -49,6 +49,10 @@ import { ReportReason } from "../../contexts/reports-context";
 import FlagIcon from "@mui/icons-material/Flag";
 import OverlappingAvatars from "../Common/OverlappingAvatars";
 import { Nip05Badge } from "../Common/Nip05Badge";
+import { RelaySourceModal } from "../Common/RelaySourceModal";
+import { PublishDiagnosticModal } from "../Common/PublishDiagnosticModal";
+import { useEventRelays } from "../../hooks/useEventRelays";
+import { PublishResult } from "../../utils/publish";
 
 interface NotesProps {
   event: Event;
@@ -95,9 +99,14 @@ export const Notes: React.FC<NotesProps> = ({
   const [reportUserDialogOpen, setReportUserDialogOpen] = useState(false);
   const [showReportedAnyway, setShowReportedAnyway] = useState(false);
 
+  // Relay source
+  const eventRelays = useEventRelays(event.id);
+  const [relayModalOpen, setRelayModalOpen] = useState(false);
+
   // Broadcast state
   const [isBroadcasting, setIsBroadcasting] = useState(false);
-  const [broadcastResult, setBroadcastResult] = useState<{ accepted: number; total: number } | null>(null);
+  const [broadcastResult, setBroadcastResult] = useState<PublishResult | null>(null);
+  const [diagnosticOpen, setDiagnosticOpen] = useState(false);
 
   const handleBroadcast = async () => {
     if (isBroadcasting) return;
@@ -105,9 +114,11 @@ export const Notes: React.FC<NotesProps> = ({
     setBroadcastResult(null);
     try {
       const res = await waitForPublish(writeRelays, event);
-      setBroadcastResult({ accepted: res.accepted, total: res.total });
+      setBroadcastResult(res);
+      if (!res.ok || res.accepted < res.total) setDiagnosticOpen(true);
     } catch {
-      setBroadcastResult({ accepted: 0, total: relays.length });
+      setBroadcastResult({ ok: false, accepted: 0, total: relays.length, relayResults: [] });
+      setDiagnosticOpen(true);
     } finally {
       setIsBroadcasting(false);
     }
@@ -465,6 +476,17 @@ export const Notes: React.FC<NotesProps> = ({
                 ? `Broadcasted: ${broadcastResult.accepted} / ${broadcastResult.total} relays`
                 : "Broadcast"}
             </MenuItem>
+            {broadcastResult && (
+              <MenuItem onClick={() => setDiagnosticOpen(true)} sx={{ gap: 1, fontSize: "0.8rem", color: "text.secondary" }}>
+                View relay details
+              </MenuItem>
+            )}
+            {eventRelays.length > 0 && (
+              <MenuItem onClick={() => { setRelayModalOpen(true); handleCloseMenu(); }} sx={{ gap: 1 }}>
+                <CellTowerIcon fontSize="small" />
+                Found on {eventRelays.length} relay{eventRelays.length !== 1 ? 's' : ''}
+              </MenuItem>
+            )}
             <MenuItem onClick={handleCopyNevent}>Copy Event Id</MenuItem>
             <MenuItem onClick={copyNoteUrl}>Copy Link</MenuItem>
             <MenuItem onClick={handleCopyNpub}>Copy Author npub</MenuItem>
@@ -644,6 +666,19 @@ export const Notes: React.FC<NotesProps> = ({
         onClose={() => setReportUserDialogOpen(false)}
         onSubmit={handleReportUser}
         title="Report user"
+      />
+      {broadcastResult && (
+        <PublishDiagnosticModal
+          open={diagnosticOpen}
+          onClose={() => setDiagnosticOpen(false)}
+          title="Broadcast relay results"
+          entries={broadcastResult.relayResults}
+        />
+      )}
+      <RelaySourceModal
+        open={relayModalOpen}
+        onClose={() => setRelayModalOpen(false)}
+        relays={eventRelays}
       />
     </>
   );

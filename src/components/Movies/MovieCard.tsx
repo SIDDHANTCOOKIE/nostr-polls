@@ -15,6 +15,10 @@ import { useUserContext } from "../../hooks/useUserContext";
 import { selectBestMetadataEvent } from "../../utils/utils";
 import { useMetadata } from "../../hooks/MetadataProvider";
 import { useNavigate } from "react-router/dist";
+import { RelaySourceModal } from "../Common/RelaySourceModal";
+import { useEventRelays } from "../../hooks/useEventRelays";
+import CellTowerIcon from "@mui/icons-material/CellTower";
+import { IconButton, Tooltip } from "@mui/material";
 
 interface MovieCardProps {
   imdbId: string;
@@ -23,6 +27,7 @@ interface MovieCardProps {
 
 const MovieCard: React.FC<MovieCardProps> = ({ imdbId, metadataEvent }) => {
   const [modalOpen, setModalOpen] = useState(false);
+  const [relayModalOpen, setRelayModalOpen] = useState(false);
   const { fetchUserProfileThrottled, profiles } = useAppContext();
   const { user } = useUserContext();
   const { registerEntity, metadata } = useMetadata();
@@ -41,6 +46,7 @@ const MovieCard: React.FC<MovieCardProps> = ({ imdbId, metadataEvent }) => {
     activeEvent = metadataEvent;
   }
 
+  const eventRelays = useEventRelays(activeEvent?.id ?? '');
   const title = activeEvent?.content || `No Metadata - ${imdbId}`;
   const poster = activeEvent?.tags.find((t) => t[0] === "poster")?.[1];
   const year = activeEvent?.tags.find((t) => t[0] === "year")?.[1];
@@ -142,6 +148,13 @@ const MovieCard: React.FC<MovieCardProps> = ({ imdbId, metadataEvent }) => {
               </Typography>
             )}
             <Rate entityId={imdbId} entityType="movie" />
+            {activeEvent && eventRelays.length > 0 && (
+              <Tooltip title={`Found on ${eventRelays.length} relay${eventRelays.length !== 1 ? 's' : ''}`}>
+                <IconButton size="small" onClick={() => setRelayModalOpen(true)} sx={{ mt: 0.5, opacity: 0.5, '&:hover': { opacity: 1 } }}>
+                  <CellTowerIcon sx={{ fontSize: 16 }} />
+                </IconButton>
+              </Tooltip>
+            )}
           </CardContent>
         </Box>
       </Card>
@@ -150,6 +163,11 @@ const MovieCard: React.FC<MovieCardProps> = ({ imdbId, metadataEvent }) => {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         imdbId={imdbId}
+      />
+      <RelaySourceModal
+        open={relayModalOpen}
+        onClose={() => setRelayModalOpen(false)}
+        relays={eventRelays}
       />
     </>
   );

@@ -52,6 +52,10 @@ import { ReportReason } from "../../contexts/reports-context";
 import FlagIcon from "@mui/icons-material/Flag";
 import OverlappingAvatars from "../Common/OverlappingAvatars";
 import { Nip05Badge } from "../Common/Nip05Badge";
+import { RelaySourceModal } from "../Common/RelaySourceModal";
+import { PublishDiagnosticModal } from "../Common/PublishDiagnosticModal";
+import { useEventRelays } from "../../hooks/useEventRelays";
+import { PublishResult } from "../../utils/publish";
 import PollOptions from "./PollOptions";
 import { usePollResults } from "../../hooks/usePollResults";
 
@@ -80,11 +84,11 @@ const PollResponseForm: React.FC<PollResponseFormProps> = ({
   const contentRef = useRef<HTMLDivElement | null>(null);
 
   const [isDetailsOpen, setIsDetailsOpen] = useState<boolean>(false);
+  const [relayModalOpen, setRelayModalOpen] = useState(false);
   const [isBroadcasting, setIsBroadcasting] = useState(false);
-  const [broadcastResult, setBroadcastResult] = useState<{
-    accepted: number;
-    total: number;
-  } | null>(null);
+  const [broadcastResult, setBroadcastResult] = useState<PublishResult | null>(null);
+  const [diagnosticOpen, setDiagnosticOpen] = useState(false);
+  const [diagnosticResult, setDiagnosticResult] = useState<PublishResult | null>(null);
   const [error, setError] = useState<string>("");
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
   const [filterPubkeys, setFilterPubkeys] = useState<string[]>([]);
@@ -102,6 +106,7 @@ const PollResponseForm: React.FC<PollResponseFormProps> = ({
   const { relays, writeRelays } = useRelays();
   const { fetchLatestContactList } = useListContext();
   const { reportEvent, reportUser, isReportedByMe, getWoTReporters, wotReportThreshold, requestUserReportCheck } = useReports();
+  const eventRelays = useEventRelays(pollEvent.id);
 
   const difficulty = Number(
     pollEvent.tags.find((t) => t[0] === "PoW")?.[1]
@@ -152,9 +157,16 @@ const PollResponseForm: React.FC<PollResponseFormProps> = ({
     setBroadcastResult(null);
     try {
       const res = await waitForPublish(writeRelays, pollEvent);
-      setBroadcastResult({ accepted: res.accepted, total: res.total });
+      setBroadcastResult(res);
+      if (!res.ok || res.accepted < res.total) {
+        setDiagnosticResult(res);
+        setDiagnosticOpen(true);
+      }
     } catch {
-      setBroadcastResult({ accepted: 0, total: relays.length });
+      const res: PublishResult = { ok: false, accepted: 0, total: relays.length, relayResults: [] };
+      setBroadcastResult(res);
+      setDiagnosticResult(res);
+      setDiagnosticOpen(true);
     } finally {
       setIsBroadcasting(false);
     }
@@ -248,8 +260,14 @@ const PollResponseForm: React.FC<PollResponseFormProps> = ({
     const result = await waitForPublish(publishRelays, signedResponse!);
     if (result.ok) {
       showNotification(`Vote submitted to ${result.accepted}/${result.total} relays`, "success");
+      if (result.accepted < result.total) {
+        setDiagnosticResult(result);
+        setDiagnosticOpen(true);
+      }
     } else {
       showNotification("No relays accepted your vote", "error");
+      setDiagnosticResult(result);
+      setDiagnosticOpen(true);
     }
     setHasSubmitted(true);
     setShowResults(true);
@@ -419,6 +437,17 @@ const PollResponseForm: React.FC<PollResponseFormProps> = ({
                   ? `Broadcasted: ${broadcastResult.accepted} / ${broadcastResult.total} relays`
                   : "Broadcast"}
               </MenuItem>
+              {broadcastResult && (
+                <MenuItem onClick={() => { setDiagnosticResult(broadcastResult); setDiagnosticOpen(true); }} sx={{ gap: 1, fontSize: "0.8rem", color: "text.secondary" }}>
+                  View relay details
+                </MenuItem>
+              )}
+              {eventRelays.length > 0 && (
+                <MenuItem onClick={() => { setRelayModalOpen(true); setIsDetailsOpen(false); setAnchorEl(null); }} sx={{ gap: 1 }}>
+                  <CellTowerIcon fontSize="small" />
+                  Found on {eventRelays.length} relay{eventRelays.length !== 1 ? 's' : ''}
+                </MenuItem>
+              )}
               <MenuItem onClick={handleCopyNevent}>Copy Event Id</MenuItem>
               <MenuItem onClick={copyPollUrl}>Copy URL</MenuItem>
               <MenuItem onClick={handleCopyNpub}>Copy Author npub</MenuItem>
@@ -549,6 +578,19 @@ const PollResponseForm: React.FC<PollResponseFormProps> = ({
           </Card>
         </form>
         <FeedbackMenu event={pollEvent} />
+        {diagnosticResult && (
+          <PublishDiagnosticModal
+            open={diagnosticOpen}
+            onClose={() => setDiagnosticOpen(false)}
+            title="Vote publish results"
+            entries={diagnosticResult.relayResults}
+          />
+        )}
+        <RelaySourceModal
+          open={relayModalOpen}
+          onClose={() => setRelayModalOpen(false)}
+          relays={eventRelays}
+        />
       </Card>
 
       <ProofofWorkModal

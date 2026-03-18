@@ -34,7 +34,8 @@ import { signEvent } from "../../nostr";
 import { useRelays } from "../../hooks/useRelays";
 import { PollPreview } from "./PollPreview";
 import { Event } from "nostr-tools";
-import { publishWithGossip } from "../../utils/publish";
+import { publishWithGossip, PublishResult } from "../../utils/publish";
+import { PublishDiagnosticModal } from "../Common/PublishDiagnosticModal";
 import { extractHashtags } from "../../utils/common";
 
 const generateOptionId = (): string => {
@@ -75,6 +76,8 @@ const PollTemplateForm: React.FC<{
   const [poW, setPoW] = useState<number | null>(null);
   const [expiration, setExpiration] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [publishResult, setPublishResult] = useState<PublishResult | null>(null);
+  const [diagnosticOpen, setDiagnosticOpen] = useState(false);
   const [topics, setTopics] = useState<string[]>([]);
 
   const { showNotification } = useNotification();
@@ -143,17 +146,10 @@ const PollTemplateForm: React.FC<{
 
       const result = await publishWithGossip(writeRelays, signedEvent);
       setIsSubmitting(false);
-      if (result.ok) {
-        showNotification(
-          `Poll published to ${result.accepted}/${result.total} relays`,
-          "success"
-        );
-        navigate("/feeds/polls");
-      } else {
-        showNotification(
-          NOTIFICATION_MESSAGES.POLL_PUBLISH_NO_RELAY,
-          "error"
-        );
+      setPublishResult(result);
+      setDiagnosticOpen(true);
+      if (!result.ok) {
+        showNotification(NOTIFICATION_MESSAGES.POLL_PUBLISH_NO_RELAY, "error");
       }
     } catch (error) {
       setIsSubmitting(false);
@@ -325,6 +321,17 @@ const PollTemplateForm: React.FC<{
           </Box>
         </Box>
       </Stack>
+      {publishResult && (
+        <PublishDiagnosticModal
+          open={diagnosticOpen}
+          onClose={() => {
+            setDiagnosticOpen(false);
+            if (publishResult.ok) navigate("/feeds/polls");
+          }}
+          title="Poll publish results"
+          entries={publishResult.relayResults}
+        />
+      )}
     </form>
   );
 };

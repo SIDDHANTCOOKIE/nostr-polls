@@ -24,7 +24,8 @@ import VisibilityIcon from "@mui/icons-material/Visibility";
 import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
 import AutoFixHighIcon from "@mui/icons-material/AutoFixHigh";
 import { NotePreview } from "./NotePreview";
-import { publishWithGossip } from "../../utils/publish";
+import { publishWithGossip, PublishResult } from "../../utils/publish";
+import { PublishDiagnosticModal } from "../Common/PublishDiagnosticModal";
 import MentionTextArea, { extractMentionTags } from "./MentionTextArea";
 import { PostEnhancementDialog } from "./PostEnhancementDialog";
 import { aiService } from "../../services/ai-service";
@@ -39,6 +40,8 @@ const NoteTemplateForm: React.FC<{
   setEventContent: (val: string) => void;
 }> = ({ eventContent, setEventContent }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [publishResult, setPublishResult] = useState<PublishResult | null>(null);
+  const [diagnosticOpen, setDiagnosticOpen] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [topics, setTopics] = useState<string[]>([]);
   const [isEnhancing, setIsEnhancing] = useState(false);
@@ -149,17 +152,10 @@ const NoteTemplateForm: React.FC<{
       }
       const result = await publishWithGossip(writeRelays, signedEvent);
       setIsSubmitting(false);
-      if (result.ok) {
-        showNotification(
-          `Note published to ${result.accepted}/${result.total} relays`,
-          "success"
-        );
-        navigate("/feeds/notes");
-      } else {
-        showNotification(
-          NOTIFICATION_MESSAGES.NOTE_PUBLISH_NO_RELAY,
-          "error"
-        );
+      setPublishResult(result);
+      setDiagnosticOpen(true);
+      if (!result.ok) {
+        showNotification(NOTIFICATION_MESSAGES.NOTE_PUBLISH_NO_RELAY, "error");
       }
     } catch (error) {
       setIsSubmitting(false);
@@ -371,6 +367,17 @@ const NoteTemplateForm: React.FC<{
         originalText={eventContent}
         onApply={handleApplySuggestions}
       />
+      {publishResult && (
+        <PublishDiagnosticModal
+          open={diagnosticOpen}
+          onClose={() => {
+            setDiagnosticOpen(false);
+            if (publishResult.ok) navigate("/feeds/notes");
+          }}
+          title="Note publish results"
+          entries={publishResult.relayResults}
+        />
+      )}
     </form>
   );
 };

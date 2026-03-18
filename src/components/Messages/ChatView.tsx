@@ -29,6 +29,7 @@ const TIMEOUT_MARKER = "__send_timeout__";
 export interface MsgSendStatus {
   relays: Record<string, RelayStatus>;
   reasons: Record<string, string>; // relay url -> rejection reason from relay
+  latencies: Record<string, number>; // relay url -> ms to respond
   retryWraps: { event: NostrEvent; relays: string[] }[];
 }
 
@@ -99,7 +100,7 @@ const ChatView: React.FC = () => {
   }, [conversation?.messages?.length]);
 
   const updateRelayStatus = useCallback(
-    (rumorId: string, relay: string, status: RelayStatus, reason?: string) => {
+    (rumorId: string, relay: string, status: RelayStatus, reason?: string, latencyMs?: number) => {
       setSendStatuses(prev => {
         const next = new Map(prev);
         const s = next.get(rumorId);
@@ -108,6 +109,7 @@ const ChatView: React.FC = () => {
           ...s,
           relays: { ...s.relays, [relay]: status },
           reasons: reason ? { ...s.reasons, [relay]: reason } : s.reasons,
+          latencies: latencyMs !== undefined ? { ...s.latencies, [relay]: latencyMs } : s.latencies,
         });
         return next;
       });
@@ -119,18 +121,19 @@ const ChatView: React.FC = () => {
     const { rumorId, publishes, retryWraps } = tracking;
     const initialRelays: Record<string, RelayStatus> = {};
     publishes.forEach(({ relay }) => { initialRelays[relay] = "pending"; });
-    setSendStatuses(prev => new Map(prev).set(rumorId, { relays: initialRelays, reasons: {}, retryWraps }));
+    setSendStatuses(prev => new Map(prev).set(rumorId, { relays: initialRelays, reasons: {}, latencies: {}, retryWraps }));
 
     publishes.forEach(({ relay, promise }) => {
+      const start = Date.now();
       const timeout = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error(TIMEOUT_MARKER)), SEND_TIMEOUT_MS)
       );
       Promise.race([promise, timeout])
-        .then(() => updateRelayStatus(rumorId, relay, "sent"))
+        .then(() => updateRelayStatus(rumorId, relay, "sent", undefined, Date.now() - start))
         .catch((err: unknown) => {
           const isTimeout = err instanceof Error && err.message === TIMEOUT_MARKER;
           const reason = !isTimeout && err instanceof Error ? err.message : undefined;
-          updateRelayStatus(rumorId, relay, isTimeout ? "timeout" : "failed", reason);
+          updateRelayStatus(rumorId, relay, isTimeout ? "timeout" : "failed", reason, Date.now() - start);
         });
     });
   }, [updateRelayStatus]);
@@ -149,15 +152,16 @@ const ChatView: React.FC = () => {
       const pubs = pool.publish(relays, event);
       relays.forEach((relay, i) => {
         if (!trackedRelays.has(relay)) return;
+        const start = Date.now();
         const timeout = new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error(TIMEOUT_MARKER)), SEND_TIMEOUT_MS)
         );
         Promise.race([pubs[i], timeout])
-          .then(() => updateRelayStatus(rumorId, relay, "sent"))
+          .then(() => updateRelayStatus(rumorId, relay, "sent", undefined, Date.now() - start))
           .catch((err: unknown) => {
             const isTimeout = err instanceof Error && err.message === TIMEOUT_MARKER;
             const reason = !isTimeout && err instanceof Error ? err.message : undefined;
-            updateRelayStatus(rumorId, relay, isTimeout ? "timeout" : "failed", reason);
+            updateRelayStatus(rumorId, relay, isTimeout ? "timeout" : "failed", reason, Date.now() - start);
           });
       });
     });

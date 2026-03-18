@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 import { Box, Typography, Paper, Chip, CircularProgress, Tooltip } from "@mui/material";
 import ReplyIcon from "@mui/icons-material/Reply";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
@@ -8,6 +8,7 @@ import { MsgSendStatus, RelayStatus } from "./ChatView";
 import dayjs from "dayjs";
 import { DMMessage } from "../../contexts/dm-context";
 import { TextWithImages } from "../Common/Parsers/TextWithImages";
+import { PublishDiagnosticModal } from "../Common/PublishDiagnosticModal";
 
 const SWIPE_THRESHOLD = 64;
 
@@ -91,6 +92,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === "dark";
+  const [diagOpen, setDiagOpen] = useState(false);
 
   // Sent-bubble colour tokens — warm amber palette, mode-aware.
   // Dark: deep amber bg so it doesn't sear against the #4d4d4d page background.
@@ -328,6 +330,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
       {sendStatus && (() => {
         const entries = Object.entries(sendStatus.relays);
         const allSent = entries.every(([, s]) => s === "sent");
+        const anyProblem = entries.some(([, s]) => s === "failed" || s === "timeout");
         const allFailed = entries.length > 0 && entries.every(([, s]) => s === "failed" || s === "timeout");
         if (allSent) return null;
         return (
@@ -359,9 +362,33 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
                 )}
               </>
             )}
+            {anyProblem && (
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                onClick={() => setDiagOpen(true)}
+                sx={{ fontSize: "0.7rem", cursor: "pointer", textDecoration: "underline", ml: 0.5 }}
+              >
+                Details
+              </Typography>
+            )}
           </Box>
         );
       })()}
+      {sendStatus && diagOpen && (
+        <PublishDiagnosticModal
+          open={diagOpen}
+          onClose={() => setDiagOpen(false)}
+          title="DM delivery results"
+          entries={Object.entries(sendStatus.relays).map(([relay, status]) => ({
+            relay,
+            status,
+            message: sendStatus.reasons[relay],
+            latencyMs: sendStatus.latencies[relay],
+          }))}
+          onRetry={onRetry ? () => onRetry() : undefined}
+        />
+      )}
     </Box>
   );
 };

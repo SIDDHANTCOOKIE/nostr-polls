@@ -61,6 +61,14 @@ export interface ManagedSubscription {
   chunks?: SubCloser[];
   /** Whether EOSE has been received */
   eoseReceived: boolean;
+  /** Timestamp (ms) when subscription was created */
+  startedAt: number;
+  /** Timestamp (ms) when first event was received, if any */
+  firstEventAt?: number;
+  /** Timestamp (ms) when EOSE was received, if any */
+  eoseAt?: number;
+  /** Total events received by this subscription */
+  eventCount: number;
 }
 
 /**
@@ -90,4 +98,8 @@ export interface SubscriptionDebugInfo {
   callbackCount: number;
   eoseReceived: boolean;
   isChunked: boolean;
+  startedAt: number;
+  firstEventAt?: number;
+  eoseAt?: number;
+  eventCount: number;
 }
