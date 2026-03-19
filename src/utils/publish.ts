@@ -54,6 +54,18 @@ async function attemptPublish(
   );
 }
 
+/** Returns true for connection-level errors that warrant an automatic retry. */
+function isConnectionError(msg: string | undefined): boolean {
+  if (!msg) return false;
+  const lower = msg.toLowerCase();
+  return (
+    lower.includes("websocket") ||
+    lower.includes("closed by us") ||
+    lower.includes("closed connection") ||
+    lower.includes("sending on closed")
+  );
+}
+
 export async function waitForPublish(
   relays: string[],
   event: Event
@@ -75,7 +87,7 @@ export async function waitForPublish(
   // in the pool so ensureRelay() creates a fresh WebSocket rather than reusing
   // the stale one. We retry only the affected relays, not the whole set.
   const wsErrorRelays = relayResults
-    .filter((r) => r.status === "rejected" && r.message?.toLowerCase().includes("websocket"))
+    .filter((r) => r.status === "rejected" && isConnectionError(r.message))
     .map((r) => r.relay);
 
   if (wsErrorRelays.length > 0) {
