@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useRef } from "react";
 import { Box, CircularProgress, Fab, LinearProgress } from "@mui/material";
 import { Virtuoso, VirtuosoHandle } from "react-virtuoso";
 import { useNotification } from "../../contexts/notification-context";

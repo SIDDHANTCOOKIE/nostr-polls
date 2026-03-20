@@ -14,7 +14,7 @@ import {
 } from "@mui/material";
 import ShieldIcon from "@mui/icons-material/Shield";
 import SearchIcon from "@mui/icons-material/Search";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useListContext } from "../../../hooks/useListContext";
 import { useMyTopicsFeed } from "../../../hooks/useMyTopicsFeed";
 import { Notes } from "../../../components/Notes";
