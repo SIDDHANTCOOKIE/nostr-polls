@@ -219,11 +219,11 @@ export class NostrRuntime {
         }
       );
 
-      // Timeout fallback (2.5s) in case EOSE never arrives
+      // Timeout fallback (8s) in case EOSE never arrives
       setTimeout(() => {
         handle.unsubscribe();
         resolve(collected);
-      }, 2500);
+      }, 8000);
     });
   }
 
@@ -304,8 +304,8 @@ export class NostrRuntime {
       }
     );
 
-    // Fallback: resolve remaining with null after 2.5 s
-    setTimeout(finish, 2500);
+    // Fallback: resolve remaining with null after 8 s
+    setTimeout(finish, 8000);
   }
 
   /**

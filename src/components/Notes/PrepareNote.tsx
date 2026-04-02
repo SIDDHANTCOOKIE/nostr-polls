@@ -7,6 +7,7 @@ import RefreshIcon from "@mui/icons-material/Refresh";
 import { nostrRuntime } from "../../singletons";
 import { EventPointer } from "nostr-tools/lib/types/nip19";
 import PollResponseForm from "../PollResponse/PollResponseForm";
+import { getRelaysForAuthors } from "../../nostr/OutboxService";
 
 interface PrepareNoteInterface {
   neventId: string;
@@ -24,10 +25,15 @@ export const PrepareNote: React.FC<PrepareNoteInterface> = ({ neventId }) => {
     try {
       const decoded = nip19.decode(neventId).data as EventPointer;
 
-      const neventRelays = decoded.relays;
-      const relaysToUse = Array.from(
-        new Set([...relays, ...(neventRelays || [])])
-      );
+      // Start with user relays + any relay hints embedded in the nevent
+      let relaysToUse = Array.from(new Set([...relays, ...(decoded.relays || [])]));
+
+      // If the nevent includes the author, also look up their outbox relays
+      // (uses the in-memory NIP-65 cache — no extra network round-trip if already cached)
+      if (decoded.author) {
+        relaysToUse = getRelaysForAuthors(relaysToUse, [decoded.author]);
+      }
+
       // fetchBatched checks cache first and batches multiple IDs
       // requested within a 50ms window into a single relay query
       const result = await nostrRuntime.fetchBatched(relaysToUse, decoded.id);

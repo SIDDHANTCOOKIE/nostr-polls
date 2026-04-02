@@ -104,25 +104,36 @@ export const useFollowingNotes = () => {
     prefetchOutboxRelays(authors); // fire-and-forget, populates cache for gossip model
     const gossipRelays = getRelaysForAuthors(relays, authors);
 
-    const noteFilter: Filter = { kinds: [1], authors, limit: 10 };
-    // On a fresh refresh, don't use `until` — fetch the latest from network
-    if (!fresh) {
+    const now = Math.floor(Date.now() / 1000);
+    const noteFilter: Filter = { kinds: [1], authors, limit: 30 };
+    if (fresh) {
+      // Fresh refresh: fetch last 24h
+      noteFilter.since = now - 86400;
+    } else {
       const currentNotes = notes();
       if (currentNotes.size > 0) {
+        // Pagination: go backwards from oldest note
         noteFilter.until = Array.from(currentNotes.values()).sort(
           (a, b) => a.created_at - b.created_at
         )[0].created_at;
+      } else {
+        // Initial load: start with last 24h
+        noteFilter.since = now - 86400;
       }
     }
 
-    const repostFilter: Filter = { kinds: [6], authors, limit: 10 };
-    if (!fresh) {
+    const repostFilter: Filter = { kinds: [6], authors, limit: 30 };
+    if (fresh) {
+      repostFilter.since = now - 86400;
+    } else {
       const currentReposts = reposts();
       if (currentReposts.size > 0) {
         const oldestRepostTime = Math.min(
           ...Array.from(currentReposts.values()).flat().map((r) => r.created_at)
         );
         repostFilter.until = oldestRepostTime;
+      } else {
+        repostFilter.since = now - 86400;
       }
     }
 

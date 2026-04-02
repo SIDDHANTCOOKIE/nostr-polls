@@ -13,7 +13,8 @@ export const useDiscoverNotes = () => {
     const [refreshing, setRefreshing] = useState(false);
     const [initialLoadComplete, setInitialLoadComplete] = useState(false);
     const subscriptionHandleRef = useRef<any>(null);
-    const fetchedRef = useRef(false);
+    const loadingRef = useRef(false);
+    const oldestTimestampRef = useRef<number | null>(null);
     const webOfTrustRef = useRef<Set<string>>(new Set());
 
     // Query runtime for notes (only re-queries when version bumps, i.e. when user merges)
@@ -58,33 +59,52 @@ export const useDiscoverNotes = () => {
     }, [initialLoadComplete, relays, checkForNewer]);
 
     const fetchNotes = useCallback((webOfTrust: Set<string>, fresh?: boolean) => {
-        if (!webOfTrust?.size || !relays?.length || fetchedRef.current) return;
+        if (!webOfTrust?.size || !relays?.length) return;
+        if (loadingRef.current) return;
 
-        fetchedRef.current = true;
+        loadingRef.current = true;
         webOfTrustRef.current = webOfTrust;
 
         if (subscriptionHandleRef.current) {
             subscriptionHandleRef.current.unsubscribe();
         }
 
-        if (fresh) setRefreshing(true); else setLoadingMore(true);
+        if (fresh) {
+            setRefreshing(true);
+            oldestTimestampRef.current = null;
+        } else {
+            setLoadingMore(true);
+        }
 
+        const now = Math.floor(Date.now() / 1000);
         const filter: Filter = {
             kinds: [1],
             authors: Array.from(webOfTrust),
-            limit: 20,
+            limit: 30,
         };
+
+        if (oldestTimestampRef.current !== null) {
+            // Pagination: go backwards from oldest seen event
+            filter.until = oldestTimestampRef.current;
+        } else {
+            // Initial or fresh load: fetch last 24h
+            filter.since = now - 86400;
+        }
 
         let hasNewEvents = false;
         const handle = nostrRuntime.subscribe(relays, [filter], {
-            onEvent: () => {
+            onEvent: (event: any) => {
                 hasNewEvents = true;
+                if (oldestTimestampRef.current === null || event.created_at < oldestTimestampRef.current) {
+                    oldestTimestampRef.current = event.created_at;
+                }
             },
             onEose: () => {
                 if (hasNewEvents) setVersion((v) => v + 1);
                 setLoadingMore(false);
                 setRefreshing(false);
                 setInitialLoadComplete(true);
+                loadingRef.current = false;
                 handle.unsubscribe();
             },
             fresh,
@@ -95,6 +115,7 @@ export const useDiscoverNotes = () => {
         const timeout = setTimeout(() => {
             setLoadingMore(false);
             setInitialLoadComplete(true);
+            loadingRef.current = false;
         }, LOAD_TIMEOUT_MS);
 
         return () => {
@@ -107,7 +128,8 @@ export const useDiscoverNotes = () => {
     }, [relays]);
 
     const refreshNotes = useCallback((webOfTrust: Set<string>) => {
-        fetchedRef.current = false; // allow re-fetch
+        loadingRef.current = false;
+        oldestTimestampRef.current = null;
         setVersion(0);
         setPendingCount(0);
         setInitialLoadComplete(false);
