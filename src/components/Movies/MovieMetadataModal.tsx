@@ -39,16 +39,80 @@ const MovieMetadataModal: React.FC<MovieMetadataModalProps> = ({
   const { result, open: diagOpen, setOpen: setDiagOpen, title: diagTitle, openModal, retry } = usePublishDiagnostic();
   useBackClose(open, onClose);
 
-  useEffect(() => {
-    const initialize = async () => {
-      if (!open) return; // Only initialize when modal is actually open
-      else {
-        setPreviewEvent(await buildPreviewEvent());
+  const fetchFallbackMovieMetadata = async (imdbId: string) => {
+    const cacheKey = `movie-fallback:${imdbId}`;
+    const cached = localStorage.getItem(cacheKey);
+
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch {
+        localStorage.removeItem(cacheKey);
       }
+    }
+
+    const sparql = `
+SELECT ?itemLabel ?year ?article WHERE {
+  ?item wdt:P345 "${imdbId}".
+  OPTIONAL { ?item wdt:P577 ?year. }
+  OPTIONAL {
+    ?article schema:about ?item ;
+             schema:isPartOf <https://en.wikipedia.org/> .
+  }
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+}
+LIMIT 1
+`;
+    const wikiDataUrl = `https://query.wikidata.org/sparql?format=json&query=${encodeURIComponent(sparql)}`;
+    const wikiDataRes = await fetch(wikiDataUrl);
+    const wikiData = await wikiDataRes.json();
+
+    const result = wikiData?.results?.bindings?.[0];
+    if (!result?.itemLabel?.value) return null;
+
+    const title = result.itemLabel.value;
+    const year = result.year?.value?.slice(0, 4) || "";
+
+    const articleUrl = result.article?.value;
+    const wikiTitle = articleUrl
+      ? articleUrl.split("/wiki/")[1]
+      : encodeURIComponent(title.replace(/ /g, "_"));
+    const wikiRes = await fetch(
+      `https://en.wikipedia.org/api/rest_v1/page/summary/${wikiTitle}`
+    );
+
+    const wiki = await wikiRes.json();
+
+    const fallback = {
+      title,
+      year,
+      poster: wiki.thumbnail?.source || "",
+      summary: wiki.extract || "",
     };
+
+    localStorage.setItem(cacheKey, JSON.stringify(fallback));
+    return fallback;
+  };
+
+  useEffect(() => {
+    if (!open) return;
+
+    const initialize = async () => {
+      const fallback = await fetchFallbackMovieMetadata(imdbId);
+
+      if (fallback) {
+        setTitle((prev) => prev || fallback.title);
+        setPoster((prev) => prev || fallback.poster);
+        setYear((prev) => prev || fallback.year);
+        setSummary((prev) => prev || fallback.summary);
+      }
+
+      setPreviewEvent(await buildPreviewEvent());
+    };
+
     initialize();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [title, poster, year, summary, open]);
+  }, [open, imdbId]);
 
   const buildTags = () => [
     ["d", `movie:${imdbId}`],
