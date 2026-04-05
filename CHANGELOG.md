@@ -1,3 +1,7 @@
+# 1.7.5
+- Fix publish on Ratings on DMs
+- Fix Stale relay connections
+
 # 1.7.4
 - Add System wide PIP.
 
