@@ -15,6 +15,7 @@ import TagIcon from "@mui/icons-material/Tag";
 import ArticleIcon from "@mui/icons-material/Article";
 import MovieIcon from "@mui/icons-material/Movie";
 import PeopleIcon from "@mui/icons-material/People";
+import DashboardIcon from "@mui/icons-material/Dashboard";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import { SvgIconComponent } from "@mui/icons-material";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -24,6 +25,11 @@ import { useSubNav } from "../../contexts/SubNavContext";
 // feed is currently mounted. Active state is read from localStorage so we can
 // show the correct selection even for feeds that aren't mounted yet.
 const MOBILE_SUB_ITEMS: Record<string, { key: string; label: string }[]> = {
+  all: [
+    { key: "global", label: "Global" },
+    { key: "following", label: "Following" },
+    { key: "webOfTrust", label: "Web of Trust" },
+  ],
   polls: [
     { key: "global", label: "Global" },
     { key: "following", label: "Following" },
@@ -47,6 +53,7 @@ const MOBILE_SUB_ITEMS: Record<string, { key: string; label: string }[]> = {
 };
 
 const FEED_STORAGE_KEYS: Record<string, string> = {
+  all: "pollerama:mixedSource",
   polls: "pollerama:pollSource",
   notes: "pollerama:lastNotesTab",
   topics: "pollerama:lastTopicsTab",
@@ -54,6 +61,7 @@ const FEED_STORAGE_KEYS: Record<string, string> = {
 };
 
 const FEED_DEFAULT_SUB: Record<string, string> = {
+  all: "global",
   polls: "global",
   notes: "discover",
   topics: "interests",
@@ -61,6 +69,7 @@ const FEED_DEFAULT_SUB: Record<string, string> = {
 };
 
 const feedOptions: { value: string; label: string; Icon: SvgIconComponent }[] = [
+  { value: "all",          label: "All",          Icon: DashboardIcon },
   { value: "polls",        label: "Polls",        Icon: HowToVoteIcon },
   { value: "topics",       label: "Topics",       Icon: TagIcon },
   { value: "notes",        label: "Notes",        Icon: ArticleIcon },

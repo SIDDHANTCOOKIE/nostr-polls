@@ -54,8 +54,17 @@ export const LoginModal: React.FC<Props> = ({ open, onClose }) => {
 
   useEffect(() => {
     const initialize = async () => {
-      const result = await NostrSignerPlugin.getInstalledSignerApps();
-      setInstalledSigners(result.apps);
+      if (!isAndroidNative()) {
+        setInstalledSigners([]);
+        return;
+      }
+      try {
+        const result = await NostrSignerPlugin.getInstalledSignerApps();
+        setInstalledSigners(result.apps);
+      } catch (err) {
+        console.error("Failed to load installed Android signers", err);
+        setInstalledSigners([]);
+      }
     };
     initialize();
   }, []);
