@@ -411,8 +411,23 @@ export const Notes: React.FC<NotesProps> = ({
               />
             }
             title={
-              <Box sx={{ minWidth: 0 }}>
-                <Typography>
+              <Box
+                onClick={() => openProfileTab(nip19.npubEncode(event.pubkey), navigate)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    openProfileTab(nip19.npubEncode(event.pubkey), navigate);
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+                sx={{
+                  minWidth: 0,
+                  cursor: "pointer",
+                  "&:hover .profile-name": { textDecoration: "underline" },
+                }}
+              >
+                <Typography className="profile-name">
                   {profiles?.get(event.pubkey)?.name ||
                     profiles?.get(event.pubkey)?.username ||
                     profiles?.get(event.pubkey)?.nip05 ||

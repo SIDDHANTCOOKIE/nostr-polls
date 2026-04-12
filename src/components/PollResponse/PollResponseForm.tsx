@@ -381,8 +381,23 @@ const PollResponseForm: React.FC<PollResponseFormProps> = ({
                 />
               }
               title={
-                <Box sx={{ minWidth: 0 }}>
-                  <Typography>
+                <Box
+                  onClick={() => openProfileTab(nip19.npubEncode(pollEvent.pubkey), navigate)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      openProfileTab(nip19.npubEncode(pollEvent.pubkey), navigate);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  sx={{
+                    minWidth: 0,
+                    cursor: "pointer",
+                    "&:hover .profile-name": { textDecoration: "underline" },
+                  }}
+                >
+                  <Typography className="profile-name">
                     {profiles?.get(pollEvent.pubkey)?.name ||
                       profiles?.get(pollEvent.pubkey)?.username ||
                       profiles?.get(pollEvent.pubkey)?.nip05 ||
