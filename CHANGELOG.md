@@ -1,38 +1,47 @@
 # 1.7.8
-- Different colors for community rating vs users own rating
+
+- Different colors for community rating vs users own rating.
 - Fixed follow-pack bookmark bug.
+- Fixed note referencing bugs.
 - Ratings gesture now waits to hold before being activated, preventing accidental ratings while scrolling.
-- Visibility uplift for some buttons
+- Visibility uplift for some buttons.
 
 # 1.7.7
+
 - Add a notification customizer while replying to threads.
 - Fix missing notifications and refresh notifications when visiting notif screen.
 
 # 1.7.6
+
 - Rating UI Uplifted
 - Fix App Search
 - Fix Initial Feed loading in topics, Following and Reacted Feeds.
 - Move Settings to a new screen
 
 # 1.7.5
+
 - Add Movie Search
 - Fix publish on Ratings on DMs
 - Fix Stale relay connections
 
 # 1.7.4
+
 - Add System wide PIP.
 
 # 1.7.3
+
 - Fix movie feed
 - Add wikidata as fallback for movie metadata.
 
 # 1.7.2
+
 - Notifications Cleanup: Filter user include, reposts , comments (1111)
 - Fixed Zaps
 - Added Unfollow
 - random UI colors for new users
 
 # 1.7.0
+
 - Chose your own Fonts and Colors!
 - Fixes slowness in loading poll results
 
