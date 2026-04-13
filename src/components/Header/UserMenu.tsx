@@ -13,6 +13,7 @@ import {
   Typography,
 } from "@mui/material";
 import { useUserContext } from "../../hooks/useUserContext";
+import { useAppContext } from "../../hooks/useAppContext";
 import { ColorSchemeToggle } from "../ColorScheme";
 import { styled } from "@mui/system";
 import { LoginModal } from "../Login/LoginModal";
@@ -29,14 +30,33 @@ const ListItem = styled("li")(() => ({
   padding: "0 16px",
 }));
 
+function shortNpub(pubkey: string): string {
+  const npub = nip19.npubEncode(pubkey);
+  return `${npub.slice(0, 10)}...${npub.slice(-4)}`;
+}
+
 export const UserMenu: React.FC = () => {
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
   const [showLoginModal, setShowLoginModal] = React.useState(false);
   const [showKeysModal, setShowKeysModal] = React.useState(false);
   const [showContactsModal, setShowContactsModal] = React.useState(false);
   const { user, accounts, switchAccount, removeAccount } = useUserContext();
+  const { profiles, fetchUserProfileThrottled } = useAppContext();
   const navigate = useNavigate();
   const { connected, total, gossipConnected, gossipTotal } = useRelayHealth();
+
+  // Fetch fresh profile data from relays for all stored accounts so the
+  // header avatar stays up-to-date even when the localStorage cache is stale.
+  React.useEffect(() => {
+    for (const account of accounts) {
+      fetchUserProfileThrottled(account.pubkey);
+    }
+  }, [accounts]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Prefer live relay-fetched profile over cached localStorage data
+  const liveProfile = user?.pubkey ? profiles.get(user.pubkey) : undefined;
+  const profilePicture = liveProfile?.picture || user?.picture;
+  const profileName = liveProfile?.name || user?.name;
 
   const handleLogOut = async () => {
     setAnchorEl(null);
@@ -69,7 +89,11 @@ export const UserMenu: React.FC = () => {
   return (
     <div style={{ marginLeft: 10 }}>
       <Tooltip
-        title={user?.privateKey ? "Guest key stored insecurely in browser" : ""}
+        title={
+          user?.pubkey
+            ? `${shortNpub(user.pubkey)}${user?.privateKey ? " · Guest key stored insecurely in browser" : ""}`
+            : ""
+        }
       >
         <Badge
           color="warning"
@@ -80,11 +104,11 @@ export const UserMenu: React.FC = () => {
           badgeContent={<WarningAmber fontSize="small" />}
         >
           <Avatar
-            src={user?.picture}
+            src={profilePicture}
             onClick={(e) => setAnchorEl(e.currentTarget)}
             sx={{ cursor: "pointer" }}
           >
-            {!user?.picture && user?.name?.[0]}
+            {!profilePicture && (profileName?.[0] ?? "?")}
           </Avatar>
         </Badge>
       </Tooltip>
@@ -146,8 +170,10 @@ export const UserMenu: React.FC = () => {
             {/* Account switcher — one row per stored account */}
             {accounts.map((account) => {
               const isActive = account.pubkey === user.pubkey;
-              const displayName =
-                account.userData?.name || account.pubkey.slice(0, 10) + "…";
+              const liveAccProfile = profiles.get(account.pubkey);
+              const accPicture = liveAccProfile?.picture || account.userData?.picture;
+              const accName = liveAccProfile?.name || account.userData?.name;
+              const displayName = accName || shortNpub(account.pubkey);
               return (
                 <MenuItem
                   key={account.pubkey}
@@ -162,10 +188,10 @@ export const UserMenu: React.FC = () => {
                 >
                   <ListItemAvatar sx={{ minWidth: 36 }}>
                     <Avatar
-                      src={account.userData?.picture}
+                      src={accPicture}
                       sx={{ width: 28, height: 28, fontSize: "0.8rem" }}
                     >
-                      {!account.userData?.picture && displayName[0]}
+                      {!accPicture && (accName?.[0] ?? "?")}
                     </Avatar>
                   </ListItemAvatar>
                   <ListItemText
@@ -175,15 +201,13 @@ export const UserMenu: React.FC = () => {
                       </Typography>
                     }
                     secondary={
-                      account.loginMethod !== "guest" ? (
-                        <Typography variant="caption" color="text.secondary">
-                          {account.loginMethod}
-                        </Typography>
-                      ) : (
-                        <Typography variant="caption" color="warning.main">
-                          guest
-                        </Typography>
-                      )
+                      <Typography
+                        variant="caption"
+                        color={account.loginMethod === "guest" ? "warning.main" : "text.secondary"}
+                        sx={{ fontFamily: "monospace", fontSize: "0.65rem" }}
+                      >
+                        {shortNpub(account.pubkey)}
+                      </Typography>
                     }
                   />
                   {isActive && (

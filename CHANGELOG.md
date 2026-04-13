@@ -1,3 +1,8 @@
+# 1.8.1
+
+- Fix User profiles in header menu
+- Add npub to profile switcher
+
 # 1.8.0
 
 - Add multi account support!
