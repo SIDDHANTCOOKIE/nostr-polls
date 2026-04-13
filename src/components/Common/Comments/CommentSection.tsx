@@ -42,6 +42,8 @@ import { ReportDialog } from "../../Report/ReportDialog";
 import { ReportReason } from "../../../contexts/reports-context";
 import { getAppBaseUrl } from "../../../utils/platform";
 import { Profile } from "../../../nostr/types";
+import { useNavigate } from "react-router-dom";
+import { openProfileTab } from "../../../nostr";
 
 function dedup(arr: string[]): string[] {
   const seen = new Set<string>();
@@ -91,6 +93,7 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, depth, commentAncest
   const { user } = useUserContext();
   const eventRelays = useEventRelays(comment.id);
   const { reportEvent, reportUser } = useReports();
+  const navigate = useNavigate();
 
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
   const [relayModalOpen, setRelayModalOpen] = useState(false);
@@ -116,13 +119,52 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, depth, commentAncest
   const authorName =
     commentUser?.name ||
     (() => { const n = nip19.npubEncode(comment.pubkey); return n.slice(0, 10) + "..."; })();
+  const authorNpub = nip19.npubEncode(comment.pubkey);
 
   return (
     <>
       <Card variant="outlined" style={{ marginTop: "8px" }}>
         <CardHeader
-          avatar={<Avatar src={commentUser?.picture || DEFAULT_IMAGE_URL} />}
-          title={authorName}
+          avatar={
+            <Avatar
+              src={commentUser?.picture || DEFAULT_IMAGE_URL}
+              onClick={() => openProfileTab(authorNpub, navigate)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  openProfileTab(authorNpub, navigate);
+                }
+              }}
+              role="button"
+              tabIndex={0}
+              sx={{ cursor: "pointer" }}
+            />
+          }
+          title={
+            <Box
+              onClick={() => openProfileTab(authorNpub, navigate)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  openProfileTab(authorNpub, navigate);
+                }
+              }}
+              role="button"
+              tabIndex={0}
+              sx={{
+                display: "inline-flex",
+                maxWidth: "100%",
+                cursor: "pointer",
+                "&:hover .profile-name, &:focus-visible .profile-name": {
+                  textDecoration: "underline",
+                },
+              }}
+            >
+              <Typography className="profile-name" noWrap>
+                {authorName}
+              </Typography>
+            </Box>
+          }
           subheader={calculateTimeAgo(comment.created_at)}
           action={
             <IconButton size="small" onClick={(e) => setMenuAnchor(e.currentTarget)}>

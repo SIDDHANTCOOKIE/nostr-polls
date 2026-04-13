@@ -5,6 +5,8 @@ import { useAppContext } from "../../../../hooks/useAppContext";
 import { Event } from "nostr-tools";
 import { Notes } from "../../../../components/Notes";
 import ReplayIcon from '@mui/icons-material/Replay';
+import { useNavigate } from "react-router-dom";
+import { openProfileTab } from "../../../../nostr";
 
 interface RepostsCardProps {
   note: Event;
@@ -13,6 +15,7 @@ interface RepostsCardProps {
 
 const RepostsCard: React.FC<RepostsCardProps> = ({ note, reposts }) => {
   const { profiles, fetchUserProfileThrottled } = useAppContext();
+  const navigate = useNavigate();
 
   // Filter reposts that belong to this note by checking tags for 'e' with note.id
   const matchingReposts = reposts.filter((r) => {
@@ -48,11 +51,38 @@ const RepostsCard: React.FC<RepostsCardProps> = ({ note, reposts }) => {
 
             return (
               <Tooltip title={`Reposted by ${displayName}`} key={r.id}>
-                <Avatar
-                  src={profile?.picture || DEFAULT_IMAGE_URL}
-                  alt={displayName}
-                  sx={{ width: 24, height: 24 }}
-                />
+                <div
+                  onClick={() => openProfileTab(nip19.npubEncode(r.pubkey), navigate)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      openProfileTab(nip19.npubEncode(r.pubkey), navigate);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    cursor: "pointer",
+                  }}
+                >
+                  <Avatar
+                    src={profile?.picture || DEFAULT_IMAGE_URL}
+                    alt={displayName}
+                    sx={{ width: 24, height: 24 }}
+                  />
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: "inherit",
+                      "&:hover, &:focus-visible": { textDecoration: "underline" },
+                    }}
+                  >
+                    {displayName}
+                  </Typography>
+                </div>
               </Tooltip>
             );
           })}
