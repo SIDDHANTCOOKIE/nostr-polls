@@ -365,9 +365,8 @@ export class NostrRuntime {
 
       const oneDone = () => { if (--pending <= 0) finish(); };
 
-      for (let i = 0; i < relays.length; i++) {
+      relayResults.forEach((entry, i) => {
         const url = relays[i];
-        const entry = relayResults[i];
 
         // Each relay gets its own independent connection so oneose is
         // unambiguously scoped to that single relay (SimplePool batches
@@ -400,7 +399,7 @@ export class NostrRuntime {
             // Could not connect at all — count as non-response
             oneDone();
           });
-      }
+      });
 
       // Hard timeout: resolve after 10 s regardless of how many relays replied
       setTimeout(finish, 10000);
