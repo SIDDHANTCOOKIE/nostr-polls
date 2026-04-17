@@ -183,7 +183,7 @@ export const Notes: React.FC<NotesProps> = ({
     };
 
     const signed = await signEvent(newEvent);
-    pool.publish(relays, signed);
+    pool.publish(writeRelays, signed);
     setUser({
       pubkey: signed.pubkey,
       ...user,
