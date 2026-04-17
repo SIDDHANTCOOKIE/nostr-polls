@@ -25,6 +25,7 @@ public class MainActivity extends BridgeActivity {
         // Must register before super.onCreate() so the Capacitor bridge
         // includes the plugin when it initialises.
         registerPlugin(PipPlugin.class);
+        registerPlugin(SecureKeyStoragePlugin.class);
         super.onCreate(savedInstanceState);
         createNotificationChannel();
         scheduleNotificationWorker();
