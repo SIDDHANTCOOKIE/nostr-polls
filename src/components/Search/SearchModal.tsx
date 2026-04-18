@@ -130,6 +130,15 @@ function AuthorChip({
         e.stopPropagation();
         onNavigate(`/profile/${npub}`);
       }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          e.stopPropagation();
+          onNavigate(`/profile/${npub}`);
+        }
+      }}
+      role="button"
+      tabIndex={0}
       sx={{
         display: "inline-flex",
         alignItems: "center",
@@ -138,7 +147,9 @@ function AuthorChip({
         cursor: "pointer",
         maxWidth: "100%",
         overflow: "hidden",
-        "&:hover .author-name": { textDecoration: "underline" },
+        "&:hover .author-name, &:focus-visible .author-name": {
+          textDecoration: "underline",
+        },
       }}
     >
       <Avatar
@@ -448,15 +459,20 @@ export function SearchModal({ open, onClose }: Props) {
                       {visibleProfiles.map((event) => {
                         const p = parseProfile(event);
                         return (
-                          <ListItemButton
-                            key={event.id}
-                            onClick={() =>
-                              goTo(
-                                `/profile/${nip19.npubEncode(event.pubkey)}`
-                              )
-                            }
-                            sx={{ minWidth: 0 }}
-                          >
+                            <ListItemButton
+                              key={event.id}
+                              onClick={() =>
+                                goTo(
+                                  `/profile/${nip19.npubEncode(event.pubkey)}`
+                                )
+                              }
+                              sx={{
+                                minWidth: 0,
+                                "&:hover .profile-name, &:focus-visible .profile-name": {
+                                  textDecoration: "underline",
+                                },
+                              }}
+                            >
                             <ListItemAvatar sx={{ minWidth: 48 }}>
                               <Avatar
                                 src={p.picture}
@@ -471,6 +487,7 @@ export function SearchModal({ open, onClose }: Props) {
                               primaryTypographyProps={{
                                 variant: "body2",
                                 noWrap: true,
+                                className: "profile-name",
                               }}
                               secondaryTypographyProps={{
                                 variant: "caption",
