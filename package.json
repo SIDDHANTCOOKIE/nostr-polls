@@ -21,9 +21,6 @@
     "@mui/material": "^6.1.2",
     "@mui/styles": "^6.1.2",
     "@mui/x-date-pickers": "^7.17.0",
-    "@testing-library/jest-dom": "^5.17.0",
-    "@testing-library/react": "^13.4.0",
-    "@types/jest": "^27.5.2",
     "@types/node": "^16.18.101",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
@@ -47,6 +44,13 @@
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
+  "jest": {
+    "moduleNameMapper": {
+      "^nostr-tools/nip46$": "<rootDir>/node_modules/nostr-tools/lib/cjs/nip46.js",
+      "^@mui/material/styles/useTheme$": "<rootDir>/node_modules/@mui/material/node/styles/useTheme.js",
+      "^react-router/dist$": "<rootDir>/node_modules/react-router/dist/main.js"
+    }
+  },
   "eslintConfig": {
     "extends": [
       "react-app",
@@ -66,6 +70,9 @@
     ]
   },
   "devDependencies": {
-    "@capacitor/assets": "^3.0.5"
+    "@capacitor/assets": "^3.0.5",
+    "@testing-library/jest-dom": "^5.17.0",
+    "@testing-library/react": "^13.4.0",
+    "@types/jest": "^27.5.2"
   }
 }
