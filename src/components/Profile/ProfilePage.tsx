@@ -310,7 +310,7 @@ const ProfilePage: React.FC = () => {
       sx={{
         px: 2,
         py: { xs: 2, sm: 4 },
-        height: "100vh",
+        height: "100%",
         overflowY: "auto",
       }}
     >

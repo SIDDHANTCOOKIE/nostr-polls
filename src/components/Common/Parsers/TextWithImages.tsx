@@ -23,6 +23,7 @@ import {
   setCachedTranslation,
 } from "../../../utils/translation-cache";
 import { LinkPreviewCard } from "./LinkPreviewCard";
+import { NaddrHandlers } from "./NaddrHandlers";
 
 interface TextWithImagesProps {
   content: string;
@@ -307,6 +308,15 @@ const NostrParser = ({
           <div style={{ marginTop: "0.5rem", zoom: 0.85 }}>
             <PrepareNote neventId={neventId} />
           </div>
+          {suffix}
+        </React.Fragment>
+      );
+    }
+
+    if (type === "naddr") {
+      return (
+        <React.Fragment key={index}>
+          <NaddrHandlers encoded={encoded} />
           {suffix}
         </React.Fragment>
       );

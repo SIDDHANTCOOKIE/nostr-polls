@@ -377,9 +377,14 @@ export function DMProvider({ children }: { children: ReactNode }) {
 
     startSubscription();
 
+    const seenIds = seenRumorIds.current;
     return () => {
       subRef.current?.unsubscribe();
       subRef.current = null;
+      setConversations(new Map());
+      seenIds.clear();
+      decryptionRejected.current = false;
+      clearGiftWrapCache();
     };
   }, [user, addMessage]);
 
