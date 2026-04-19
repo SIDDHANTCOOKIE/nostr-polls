@@ -1,3 +1,14 @@
+# 1.8.2
+
+So many fixes.
+- Fix Account switch behavior 
+- Fix zaps confirmation
+- Move to more secure storage for Raw nsecs and DMs cache.
+- Fix Profile click through on all pages
+- Fix Rating comments and better UX.
+- Fix Visibility issues in Profile and Movie Pages.
+
+
 # 1.8.1
 
 - Fix User profiles in header menu

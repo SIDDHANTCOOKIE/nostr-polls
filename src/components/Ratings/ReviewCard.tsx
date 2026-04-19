@@ -10,14 +10,15 @@ import {
   Link,
 } from "@mui/material";
 import { nip19, Event } from "nostr-tools";
+import { Link as RouterLink, useNavigate } from "react-router-dom";
 import { useAppContext } from "../../hooks/useAppContext";
 import { useMetadata } from "../../hooks/MetadataProvider";
 import { selectBestMetadataEvent } from "../../utils/utils";
 import { useUserContext } from "../../hooks/useUserContext";
 import { nostrRuntime } from "../../singletons";
 import { useRelays } from "../../hooks/useRelays";
-import { Link as RouterLink } from "react-router-dom";
 import { Nip05Badge } from "../Common/Nip05Badge";
+import { openProfileTab } from "../../nostr";
 
 interface Props {
   event: Event;
@@ -41,25 +42,26 @@ const ReviewCard: React.FC<Props> = ({ event }) => {
   const { user } = useUserContext();
   const { registerEntity, metadata } = useMetadata();
   const { relays } = useRelays();
+  const navigate = useNavigate();
 
   const [entityDisplay, setEntityDisplay] = useState<EntityDisplay | null>(null);
 
   const reviewUser = profiles?.get(pubkey);
   if (!reviewUser) fetchUserProfileThrottled(pubkey);
 
-  const displayName = reviewUser?.name || nip19.npubEncode(pubkey).slice(0, 12) + "...";
+  const displayName =
+    reviewUser?.name || nip19.npubEncode(pubkey).slice(0, 12) + "...";
   const picture = reviewUser?.picture;
+  const profileNpub = nip19.npubEncode(pubkey);
 
   useEffect(() => {
     const fetchEntityMetadata = async () => {
-      // Check for 'd' tag (identifier like "movie:tt1234567" or "profile:pubkey")
       const dTag = event.tags.find((t) => t[0] === "d")?.[1];
 
       if (dTag?.startsWith("movie:")) {
         const imdbId = dTag.replace("movie:", "");
         registerEntity("movie", imdbId);
 
-        // Wait a bit for metadata to load
         setTimeout(() => {
           const movieMetadata = metadata.get(imdbId);
           const activeEvent = movieMetadata
@@ -96,7 +98,6 @@ const ReviewCard: React.FC<Props> = ({ event }) => {
         return;
       }
 
-      // Check for 'e' tag (event reference - could be poll or note)
       const eTagEntry = event.tags.find((t) => t[0] === "e");
       const eTag = eTagEntry?.[1];
       if (eTag) {
@@ -108,7 +109,6 @@ const ReviewCard: React.FC<Props> = ({ event }) => {
           const eventData = await nostrRuntime.fetchBatched(fetchRelays, eTag);
           if (eventData) {
             if (eventData.kind === 1068) {
-              // Poll
               const question = eventData.tags.find((t) => t[0] === "question")?.[1];
               setEntityDisplay({
                 type: "poll",
@@ -117,8 +117,9 @@ const ReviewCard: React.FC<Props> = ({ event }) => {
                 link: `/respond/${nip19.neventEncode({ id: eTag, relays: [] })}`,
               });
             } else if (eventData.kind === 1) {
-              // Note
-              const noteContent = eventData.content.slice(0, 100) + (eventData.content.length > 100 ? "..." : "");
+              const noteContent =
+                eventData.content.slice(0, 100) +
+                (eventData.content.length > 100 ? "..." : "");
               setEntityDisplay({
                 type: "note",
                 title: noteContent || "Note",
@@ -133,7 +134,6 @@ const ReviewCard: React.FC<Props> = ({ event }) => {
         return;
       }
 
-      // Fallback for unknown entity types
       setEntityDisplay({
         type: "unknown",
         title: dTag || "Unknown entity",
@@ -141,26 +141,53 @@ const ReviewCard: React.FC<Props> = ({ event }) => {
     };
 
     fetchEntityMetadata();
-  }, [event, metadata, profiles, user?.follows, registerEntity, fetchUserProfileThrottled, relays]);
+  }, [
+    event,
+    metadata,
+    profiles,
+    user?.follows,
+    registerEntity,
+    fetchUserProfileThrottled,
+    relays,
+  ]);
 
   return (
     <Card sx={{ mb: 2 }}>
       <CardContent>
         <Stack direction="row" spacing={2} alignItems="flex-start" mb={2}>
-          <Avatar
-            src={picture}
-            alt={displayName}
-            sx={{ width: 40, height: 40 }}
-          />
-          <Box sx={{ flex: 1 }}>
-            <Typography variant="subtitle1" fontWeight={600}>
-              {displayName}
-            </Typography>
-            <Nip05Badge nip05={reviewUser?.nip05} pubkey={pubkey} />
-            <Typography variant="body2" color="text.secondary">
-              {rating.toFixed(1)} ★
-            </Typography>
+          <Box
+            onClick={() => openProfileTab(profileNpub, navigate)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                openProfileTab(profileNpub, navigate);
+              }
+            }}
+            role="button"
+            tabIndex={0}
+            sx={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 2,
+              flex: 1,
+              minWidth: 0,
+              cursor: "pointer",
+              "&:hover .profile-name, &:focus-visible .profile-name": {
+                textDecoration: "underline",
+              },
+            }}
+          >
+            <Avatar src={picture} alt={displayName} sx={{ width: 40, height: 40 }} />
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography className="profile-name" variant="subtitle1" fontWeight={600} noWrap>
+                {displayName}
+              </Typography>
+              <Nip05Badge nip05={reviewUser?.nip05} pubkey={pubkey} />
+            </Box>
           </Box>
+          <Typography variant="body2" color="text.secondary" sx={{ flexShrink: 0 }}>
+            {rating.toFixed(1)} ★
+          </Typography>
         </Stack>
 
         {entityDisplay && (
@@ -183,7 +210,11 @@ const ReviewCard: React.FC<Props> = ({ event }) => {
               />
             )}
             <Box sx={{ flex: 1 }}>
-              <Typography variant="caption" color="text.secondary" sx={{ textTransform: "uppercase" }}>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ textTransform: "uppercase" }}
+              >
                 Rated {entityDisplay.type}
               </Typography>
               {entityDisplay.link ? (
@@ -211,11 +242,7 @@ const ReviewCard: React.FC<Props> = ({ event }) => {
           </Box>
         )}
 
-        {content && (
-          <Typography variant="body1">
-            {content}
-          </Typography>
-        )}
+        {content && <Typography variant="body1">{content}</Typography>}
       </CardContent>
     </Card>
   );

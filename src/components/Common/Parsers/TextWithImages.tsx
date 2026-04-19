@@ -23,6 +23,7 @@ import {
   setCachedTranslation,
 } from "../../../utils/translation-cache";
 import { LinkPreviewCard } from "./LinkPreviewCard";
+import { NaddrHandlers } from "./NaddrHandlers";
 
 interface TextWithImagesProps {
   content: string;
@@ -312,20 +313,23 @@ const NostrParser = ({
       );
     }
 
-    if (type === "naddr" && data.kind === 30023) {
+    if (type === "naddr") {
       return (
         <React.Fragment key={index}>
-          <Box sx={{ my: 1 }}>
-            <Button
-              variant="outlined"
-              size="small"
-              onClick={() => {
-                window.location.href = `https://pages.formstr.app/doc/${encoded}`;
-              }}
-            >
-              Open in Pages
-            </Button>
-          </Box>
+          {data?.kind === 30023 && (
+            <Box sx={{ my: 1 }}>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => {
+                  window.location.href = `https://pages.formstr.app/doc/${encoded}`;
+                }}
+              >
+                Open in Pages
+              </Button>
+            </Box>
+          )}
+          <NaddrHandlers encoded={encoded} />
           {suffix}
         </React.Fragment>
       );

@@ -98,7 +98,7 @@ const RatingPopover: React.FC<Props> = ({
           elevation: 8,
           sx: {
             borderRadius: 3,
-            minWidth: 260,
+            minWidth: 300,
             overflow: "visible",
             background: (theme) =>
               theme.palette.mode === "dark"
@@ -161,7 +161,7 @@ const RatingPopover: React.FC<Props> = ({
             </>
           )}
 
-          <Rate entityId={entityId} entityType={entityType} />
+          <Rate entityId={entityId} entityType={entityType} onSubmitted={handleClose} />
         </Box>
       </Popover>
     </>

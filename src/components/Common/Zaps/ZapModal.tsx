@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Box,
   Button,
@@ -19,6 +19,7 @@ interface ZapModalProps {
   onClose: () => void;
   onZap: (amount: number) => Promise<string | null>;
   recipientName?: string;
+  zapConfirmed?: boolean;
 }
 
 const PRESET_AMOUNTS = [21, 100, 500, 1000, 5000];
@@ -91,6 +92,7 @@ const ZapModal: React.FC<ZapModalProps> = ({
   onClose,
   onZap,
   recipientName,
+  zapConfirmed,
 }) => {
   const [selectedAmount, setSelectedAmount] = useState<number | null>(100);
   const [customAmount, setCustomAmount] = useState<string>("");
@@ -98,6 +100,12 @@ const ZapModal: React.FC<ZapModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
   useBackClose(open, onClose);
+
+  useEffect(() => {
+    if (!zapConfirmed) return;
+    const timer = setTimeout(() => onClose(), 1500);
+    return () => clearTimeout(timer);
+  }, [zapConfirmed, onClose]);
 
   const handleClose = () => {
     setSelectedAmount(100);

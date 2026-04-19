@@ -80,11 +80,23 @@ export const FollowPackMembersDialog: React.FC<FollowPackMembersDialogProps> = (
                   py: 0.75,
                   cursor: "pointer",
                   "&:hover": { bgcolor: "action.hover" },
+                  "&:hover .profile-name, &:focus-visible .profile-name": {
+                    textDecoration: "underline",
+                  },
                 }}
                 onClick={() => {
                   onClose();
                   openProfileTab(npub, navigate);
                 }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onClose();
+                    openProfileTab(npub, navigate);
+                  }
+                }}
+                role="button"
+                tabIndex={0}
                 secondaryAction={
                   user && user.pubkey !== pk && !user.follows?.includes(pk) ? (
                     <Button size="small" variant="outlined" sx={{ minWidth: 70 }}>
@@ -101,7 +113,7 @@ export const FollowPackMembersDialog: React.FC<FollowPackMembersDialogProps> = (
                 </ListItemAvatar>
                 <ListItemText
                   primary={
-                    <Typography variant="body2" fontWeight={500} noWrap>
+                    <Typography className="profile-name" variant="body2" fontWeight={500} noWrap>
                       {name}
                     </Typography>
                   }

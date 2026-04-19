@@ -56,6 +56,9 @@ import MoviesFeed from "./components/Feed/MoviesFeed";
 import FollowPacksFeed from "./components/Feed/FollowPacksFeed";
 import FollowPackDetail from "./components/FollowPacks/FollowPackDetail";
 import MoviePage from "./components/Movies/MoviePage";
+import { Nip89Provider } from "./contexts/Nip89Context";
+import { useUserContext } from "./hooks/useUserContext";
+import { useAppContext } from "./hooks/useAppContext";
 import TopicsFeed from "./components/Feed/TopicsFeed";
 import TopicExplorer from "./components/Feed/TopicsFeed/TopicsExplorerFeed";
 import FeedsLayout from "./components/Feed/FeedsLayout";
@@ -145,6 +148,20 @@ function AppContent() {
       return !prev;
     });
 
+  const { user } = useUserContext();
+  const { resetStore } = useAppContext();
+  const prevPubkeyRef = React.useRef<string | null | undefined>(undefined);
+
+  React.useEffect(() => {
+    const prev = prevPubkeyRef.current;
+    const next = user?.pubkey ?? null;
+    // undefined = first render (skip); null→pubkey or pubkey→pubkey = actual switch
+    if (prev !== undefined && prev !== next) {
+      resetStore();
+    }
+    prevPubkeyRef.current = next;
+  }, [user?.pubkey, resetStore]);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
       <div className="header-safe-area">
@@ -154,7 +171,7 @@ function AppContent() {
       {/* Sidebar + routes side by side — both heights are constant */}
       <Box sx={{ flex: 1, minHeight: 0, overflow: "hidden", display: "flex" }}>
         <NavSidebar open={sidebarOpen} onToggle={toggleSidebar} />
-        <Box sx={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
+        <Box key={user?.pubkey ?? 'anon'} sx={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
           {!sidebarOpen && (
             <Fab
               size="small"
@@ -290,6 +307,7 @@ const App: React.FC = () => {
                   <TranslationBatchProvider>
                     <ListProvider>
                       <RatingProvider>
+                        <Nip89Provider>
                         <ReportsProvider>
                         <CssBaseline />
                         <MetadataProvider>
@@ -306,6 +324,7 @@ const App: React.FC = () => {
                           </VideoPlayerProvider>
                         </MetadataProvider>
                         </ReportsProvider>
+                        </Nip89Provider>
                       </RatingProvider>
                     </ListProvider>
                   </TranslationBatchProvider>

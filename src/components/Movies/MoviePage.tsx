@@ -76,7 +76,7 @@ const MoviePage = () => {
   if (loading) return <CircularProgress />;
 
   return (
-    <Box sx={{ p: 4 }}>
+    <Box sx={{ p: 4, height: "100%", overflowY: "auto", boxSizing: "border-box" }}>
       <MovieCard imdbId={imdbId!} />
       <Box mt={4} mb={2} display="flex" alignItems="center" gap={2}>
         <Typography variant="h5">Reviews</Typography>

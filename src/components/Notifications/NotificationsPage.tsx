@@ -163,6 +163,41 @@ const NotificationsPage: React.FC = () => {
     }
   };
 
+  const getNotifActionText = (ev: Event): string | null => {
+    const parsed = parseNotification(ev);
+    if (!parsed.fromPubkey) return null;
+
+    switch (parsed.type) {
+      case "poll-response":
+        return "responded to your poll";
+      case "comment":
+        return ev.kind === 1068
+          ? "mentioned you in a poll"
+          : ev.kind === 30023
+            ? "mentioned you in an article"
+            : "commented";
+      case "reaction":
+        return `reacted ${parsed.reaction}`;
+      case "zap":
+        return "zapped you ⚡";
+      case "repost":
+        return "reposted you";
+      case "highlight":
+        return "highlighted your post";
+      default:
+        return null;
+    }
+  };
+
+  const handleProfileClick = (
+    e: React.MouseEvent | React.KeyboardEvent,
+    pubkey: string | null
+  ) => {
+    if (!pubkey) return;
+    e.stopPropagation();
+    navigate(`/profile/${nip19.npubEncode(pubkey)}`);
+  };
+
   const handleItemClick = (ev: Event) => {
     const parsed = parseNotification(ev);
 
@@ -237,15 +272,54 @@ const NotificationsPage: React.FC = () => {
                 <React.Fragment key={ev.id}>
                   <ListItem
                     alignItems="flex-start"
-                    onClick={() => handleItemClick(ev)}
-                    sx={{ cursor: "pointer", "&:hover": { bgcolor: "action.hover" } }}
+                      onClick={() => handleItemClick(ev)}
+                      sx={{ cursor: "pointer", "&:hover": { bgcolor: "action.hover" } }}
                   >
                     <ListItemAvatar>
-                      <Avatar src={getAvatar(parsed.fromPubkey)} />
+                      <Avatar
+                        src={getAvatar(parsed.fromPubkey)}
+                        onClick={(e) => handleProfileClick(e, parsed.fromPubkey)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            handleProfileClick(e, parsed.fromPubkey);
+                          }
+                        }}
+                        role="button"
+                        tabIndex={0}
+                        sx={{ cursor: parsed.fromPubkey ? "pointer" : "default" }}
+                      />
                     </ListItemAvatar>
                     <ListItemText
                       primary={
-                        <Typography variant="subtitle2">{title}</Typography>
+                        getNotifActionText(ev) && parsed.fromPubkey ? (
+                          <Typography variant="subtitle2">
+                            <Box
+                              component="span"
+                              onClick={(e) => handleProfileClick(e, parsed.fromPubkey)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  handleProfileClick(e, parsed.fromPubkey);
+                                }
+                              }}
+                              role="button"
+                              tabIndex={0}
+                              sx={{
+                                cursor: "pointer",
+                                fontWeight: 600,
+                                "&:hover, &:focus-visible": {
+                                  textDecoration: "underline",
+                                },
+                              }}
+                            >
+                              {getName(parsed.fromPubkey)}
+                            </Box>{" "}
+                            {getNotifActionText(ev)}
+                          </Typography>
+                        ) : (
+                          <Typography variant="subtitle2">{title}</Typography>
+                        )
                       }
                       secondary={
                         <>

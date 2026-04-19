@@ -27,6 +27,7 @@ type AppContextInterface = {
     model: string;
   };
   setAISettings: (settings: { model: string }) => void;
+  resetStore: () => void;
 };
 
 export const AppContext = createContext<AppContextInterface | null>(null);
@@ -49,6 +50,12 @@ export function AppContextProvider({ children }: { children: ReactNode }) {
   const bumpProfilesVersion = useCallback(() => {
     if (profilesTimerRef.current) clearTimeout(profilesTimerRef.current);
     profilesTimerRef.current = setTimeout(() => setProfilesVersion((v) => v + 1), 50);
+  }, []);
+
+  const resetStore = useCallback(() => {
+    nostrRuntime.eventStore.clear();
+    setDataVersion((v) => v + 1);
+    setProfilesVersion((v) => v + 1);
   }, []);
 
   const bumpDataVersion = useCallback(() => {
@@ -271,6 +278,7 @@ export function AppContextProvider({ children }: { children: ReactNode }) {
         fetchRepostsThrottled,
         aiSettings,
         setAISettings,
+        resetStore,
       }}
     >
       {children}

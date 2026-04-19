@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Tooltip, Typography } from "@mui/material";
 import { useAppContext } from "../../../hooks/useAppContext";
 import { Event } from "nostr-tools/lib/types/core";
-import { signEvent } from "../../../nostr";
+import { defaultRelays, signEvent } from "../../../nostr";
 import { useRelays } from "../../../hooks/useRelays";
 import { FlashOn } from "@mui/icons-material";
 import { nip57 } from "nostr-tools";
@@ -11,6 +11,7 @@ import { styled } from "@mui/system";
 import { getColorsWithTheme } from "../../../styles/theme";
 import { useNotification } from "../../../contexts/notification-context";
 import { NOTIFICATION_MESSAGES } from "../../../constants/notifications";
+import { nostrRuntime } from "../../../singletons";
 import ZapModal from "./ZapModal";
 
 interface ZapProps {
@@ -24,10 +25,12 @@ const Wrapper = styled("div")(({ theme }) => ({
 }));
 
 const Zap: React.FC<ZapProps> = ({ pollEvent }) => {
-  const { fetchZapsThrottled, zapsMap, profiles } = useAppContext();
+  const { fetchZapsThrottled, zapsMap, profiles, addEventToMap } = useAppContext();
   const { user } = useUserContext();
   const [hasZapped, setHasZapped] = useState<boolean>(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [zapConfirmed, setZapConfirmed] = useState(false);
+  const zapSubRef = useRef<{ unsubscribe: () => void } | null>(null);
   const { showNotification } = useNotification();
   const { relays } = useRelays();
 
@@ -97,7 +100,24 @@ const Zap: React.FC<ZapProps> = ({ pollEvent }) => {
         zapEndpoint + `?amount=${amount * 1000}&nostr=${serializedZapEvent}`;
       const paymentRequest = await fetch(zaprequestUrl);
       const request = await paymentRequest.json();
-      fetchZapsThrottled(pollEvent.id);
+
+      // Subscribe for the zap receipt (kind 9735) so we can detect payment
+      const since = Math.floor(Date.now() / 1000);
+      zapSubRef.current?.unsubscribe();
+      const handle = nostrRuntime.subscribe(
+        defaultRelays,
+        [{ kinds: [9735], "#e": [pollEvent.id], since }],
+        {
+          onEvent: (event) => {
+            addEventToMap(event);
+            setZapConfirmed(true);
+            zapSubRef.current?.unsubscribe();
+            zapSubRef.current = null;
+          },
+        }
+      );
+      zapSubRef.current = handle;
+
       return request.pr;
     } catch (error) {
       console.error("Failed to create zap invoice:", error);
@@ -148,9 +168,15 @@ const Zap: React.FC<ZapProps> = ({ pollEvent }) => {
 
       <ZapModal
         open={modalOpen}
-        onClose={() => setModalOpen(false)}
+        onClose={() => {
+          zapSubRef.current?.unsubscribe();
+          zapSubRef.current = null;
+          setZapConfirmed(false);
+          setModalOpen(false);
+        }}
         onZap={handleZap}
         recipientName={recipientName}
+        zapConfirmed={zapConfirmed}
       />
     </Wrapper>
   );

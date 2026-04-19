@@ -8,24 +8,26 @@ import {
   Chip,
 } from "@mui/material";
 import SwipeIcon from "@mui/icons-material/SwipeRounded";
+import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import { useRating } from "../../hooks/useRating";
 import TouchRating from "./TouchRating";
 
 interface Props {
   entityId: string;
   entityType?: string;
+  onSubmitted?: () => void;
 }
 
-const Rate: React.FC<Props> = ({ entityId, entityType = "event" }) => {
+const Rate: React.FC<Props> = ({ entityId, entityType = "event", onSubmitted }) => {
   const ratingKey = `${entityType}:${entityId}`;
   const { averageRating, totalRatings, submitRating, getUserRating } =
     useRating(ratingKey);
   const [ratingValue, setRatingValue] = useState<number | null>(null);
   const [content, setContent] = useState("");
-  const [showContentInput, setShowContentInput] = useState(false);
   const [error, setError] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [touchLocked, setTouchLocked] = useState(true);
+  const [submitted, setSubmitted] = useState(false);
   const userRating = getUserRating(ratingKey);
 
   useEffect(() => {
@@ -42,23 +44,32 @@ const Rate: React.FC<Props> = ({ entityId, entityType = "event" }) => {
     setIsDragging(false);
     setRatingValue(newValue);
     setError("");
-    if (!showContentInput) {
-      submitRating(newValue, 5, entityType);
-    }
   };
 
   const handleSubmit = () => {
     if (ratingValue === null) {
-      setError("Please give a rating before submitting a review.");
+      setError("Please give a rating first.");
       return;
     }
     setError("");
-    submitRating(ratingValue, 5, entityType, content);
-    setShowContentInput(false);
+    submitRating(ratingValue, 5, entityType, content || undefined);
+    setSubmitted(true);
+    setTimeout(() => onSubmitted?.(), 1200);
   };
 
   const displayedAvg = averageRating ? (averageRating * 5).toFixed(1) : null;
   const displayValue = ratingValue ?? (averageRating ? averageRating * 5 : null);
+
+  if (submitted) {
+    return (
+      <Box display="flex" flexDirection="column" alignItems="center" py={1.5} gap={1}>
+        <CheckCircleOutlineIcon sx={{ fontSize: 36, color: "success.main" }} />
+        <Typography variant="body2" fontWeight={600}>
+          {ratingValue?.toFixed(1)} / 5 — Rated!
+        </Typography>
+      </Box>
+    );
+  }
 
   return (
     <Box onClick={(e) => e.stopPropagation()}>
@@ -111,41 +122,41 @@ const Rate: React.FC<Props> = ({ entityId, entityType = "event" }) => {
         </Typography>
       ) : null}
 
-      {/* Review CTA */}
-      {!touchLocked && !showContentInput && (
-        <Button
-          variant="text"
-          size="small"
-          sx={{ mt: 0.5, px: 0, color: "text.secondary", fontSize: "0.75rem" }}
-          onClick={(e) => { e.stopPropagation(); setShowContentInput(true); }}
-        >
-          Add a written review?
-        </Button>
-      )}
+      {/* Comment + submit — only once the user has picked a rating */}
+      {ratingValue !== null && <TextField
+        fullWidth
+        multiline
+        minRows={2}
+        maxRows={4}
+        placeholder="Add a comment… (optional)"
+        value={content}
+        onChange={(e) => { e.stopPropagation(); setContent(e.target.value); }}
+        onClick={(e) => e.stopPropagation()}
+        size="small"
+        sx={{
+          mt: 1.5,
+          "& .MuiOutlinedInput-root": {
+            borderRadius: 2,
+            fontSize: "0.85rem",
+          },
+        }}
+      />}
 
-      {/* Review input */}
-      {showContentInput && (
-        <>
-          <TextField
-            fullWidth
-            multiline
-            minRows={3}
-            label="Your Review"
-            value={content}
-            onChange={(e) => { e.stopPropagation(); setContent(e.target.value); }}
-            onClick={(e) => e.stopPropagation()}
-            sx={{ mt: 1.5 }}
-          />
-          <Button
-            variant="contained"
-            size="small"
-            sx={{ mt: 1 }}
-            onClick={(e) => { e.stopPropagation(); handleSubmit(); }}
-          >
-            Submit Review
-          </Button>
-        </>
-      )}
+      {/* Submit */}
+      {ratingValue !== null && <Button
+        variant="contained"
+        fullWidth
+        onClick={(e) => { e.stopPropagation(); handleSubmit(); }}
+        sx={{
+          mt: 1,
+          borderRadius: 2,
+          fontWeight: 700,
+          background: "linear-gradient(135deg, #FFB400 0%, #F7931A 100%)",
+          color: "#000",
+        }}
+      >
+        Submit Rating
+      </Button>}
 
       {error && (
         <Alert severity="error" sx={{ mt: 1 }}>

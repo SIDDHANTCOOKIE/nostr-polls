@@ -39,6 +39,7 @@ export function NostrNotificationsProvider({
   const { relays } = useRelays();
 
   const hasStarted = useRef(false);
+  const subHandleRef = useRef<{ unsubscribe: () => void } | null>(null);
   const [notifications, setNotifications] = useState<Map<string, Event>>(
     new Map()
   );
@@ -171,6 +172,8 @@ export function NostrNotificationsProvider({
     if (hasStarted.current) return;
 
     hasStarted.current = true;
+    let isCancelled = false;
+    const polls = pollMap.current;
 
     (async () => {
       // 1. load last seen — update ref first so pushNotification sees it immediately
@@ -188,14 +191,25 @@ export function NostrNotificationsProvider({
       // 3. subscribe only after pollIds exist
       const filters = buildFilters(user.pubkey, since);
 
-      nostrRuntime.subscribe(relays, filters, {
+      if (isCancelled) return;
+      subHandleRef.current = nostrRuntime.subscribe(relays, filters, {
         onEvent: (event: Event) => {
           pushNotification(event);
         },
       });
-
-      // Subscription remains open (not closed) for real-time notifications
     })();
+
+    return () => {
+      isCancelled = true;
+      subHandleRef.current?.unsubscribe();
+      subHandleRef.current = null;
+      hasStarted.current = false;
+      setNotifications(new Map());
+      setUnreadCount(0);
+      polls.clear();
+      latestNotifTsRef.current = 0;
+      lastSeenRef.current = null;
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, relays, fetchPollIds]); // pushNotification intentionally omitted — stable useCallback with no deps
 
