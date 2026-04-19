@@ -312,6 +312,25 @@ const NostrParser = ({
       );
     }
 
+    if (type === "naddr" && data.kind === 30023) {
+      return (
+        <React.Fragment key={index}>
+          <Box sx={{ my: 1 }}>
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={() => {
+                window.location.href = `https://pages.formstr.app/doc/${encoded}`;
+              }}
+            >
+              Open in Pages
+            </Button>
+          </Box>
+          {suffix}
+        </React.Fragment>
+      );
+    }
+
     if (type === "nprofile" || type === "npub") {
       const pubkey = type === "nprofile" ? data.pubkey : data;
       if (!profiles?.has(pubkey)) {
