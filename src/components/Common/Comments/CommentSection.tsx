@@ -256,8 +256,6 @@ const CommentSection: React.FC<CommentSectionProps> = ({
   } = useAppContext();
 
   const isNip22 = !!addressableRef;
-  // For NIP-22 threads, cache key is the addressable ref; otherwise the event id
-  const cacheKey = isNip22 ? addressableRef! : eventId;
 
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [showReplies, setShowReplies] = useState<Map<string, boolean>>(new Map());
