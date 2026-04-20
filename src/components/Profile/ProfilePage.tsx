@@ -25,6 +25,7 @@ import { DEFAULT_IMAGE_URL } from "../../utils/constants";
 import Rate from "../Ratings/Rate";
 import UserPollsFeed from "./UserPollsFeed";
 import UserNotesFeed from "./UserNotesFeed";
+import UserArticlesFeed from "./UserArticlesFeed";
 import UserRatingsGiven from "./UserRatingsGiven";
 import { useUserContext } from "../../hooks/useUserContext";
 import { useListContext } from "../../hooks/useListContext";
@@ -506,6 +507,7 @@ const ProfilePage: React.FC = () => {
         >
           <Tab label="Polls" />
           <Tab label="Notes" />
+          <Tab label="Articles" />
           <Tab label="Ratings" />
         </Tabs>
       </Box>
@@ -524,6 +526,12 @@ const ProfilePage: React.FC = () => {
         />
       </TabPanel>
       <TabPanel value={tabValue} index={2}>
+        <UserArticlesFeed
+          pubkey={pubkey}
+          scrollContainerRef={scrollContainerRef}
+        />
+      </TabPanel>
+      <TabPanel value={tabValue} index={3}>
         <UserRatingsGiven
           pubkey={pubkey}
           scrollContainerRef={scrollContainerRef}

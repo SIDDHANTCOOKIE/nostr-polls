@@ -21,6 +21,10 @@ interface FeedbackMenuProps {
   event: Event;
   depth?: number;
   ancestorPubkeys?: string[];
+  /** NIP-22: "kind:pubkey:identifier" for addressable events (e.g. articles) */
+  addressableRef?: string;
+  /** NIP-22: root event kind (e.g. 30023) */
+  rootKind?: number;
 }
 
 const MAX_DEPTH = 2;
@@ -29,6 +33,8 @@ export const FeedbackMenu: React.FC<FeedbackMenuProps> = ({
   event,
   depth = 0,
   ancestorPubkeys = [],
+  addressableRef,
+  rootKind,
 }) => {
   const [showComments, setShowComments] = useState(false);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -104,6 +110,7 @@ export const FeedbackMenu: React.FC<FeedbackMenuProps> = ({
                 eventId={event.id}
                 showComments={showComments}
                 onToggleComments={handleToggleComments}
+                addressableRef={addressableRef}
               />
             )}
 
@@ -205,6 +212,8 @@ export const FeedbackMenu: React.FC<FeedbackMenuProps> = ({
                 ancestorPubkeys={ancestorPubkeys}
                 showComments={showComments}
                 depth={depth}
+                addressableRef={addressableRef}
+                rootKind={rootKind}
               />
             </Box>
           </Collapse>

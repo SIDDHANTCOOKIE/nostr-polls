@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo } from "react";
-import { nip19 } from "nostr-tools";
+import React, { useEffect, useMemo, useState } from "react";
+import { Event, nip19 } from "nostr-tools";
 import {
   Avatar,
   Box,
@@ -8,12 +8,21 @@ import {
   Typography,
 } from "@mui/material";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
+import MenuBookIcon from "@mui/icons-material/MenuBook";
 import { useNip89 } from "../../../contexts/Nip89Context";
 import { useAppContext } from "../../../hooks/useAppContext";
+import { useRelays } from "../../../hooks/useRelays";
+import { useNavigate } from "react-router-dom";
+import { nostrRuntime } from "../../../singletons";
+import { ArticleCard } from "../../Articles/ArticleCard";
 
 export const NaddrHandlers: React.FC<{ encoded: string }> = ({ encoded }) => {
   const { handlersMap, registerKind } = useNip89();
   const { profiles, fetchUserProfileThrottled } = useAppContext();
+  const { relays } = useRelays();
+  const navigate = useNavigate();
+  const [articleEvent, setArticleEvent] = useState<Event | null>(null);
+  const [articleLoading, setArticleLoading] = useState(false);
 
   const decoded = useMemo(() => {
     try {
@@ -28,6 +37,25 @@ export const NaddrHandlers: React.FC<{ encoded: string }> = ({ encoded }) => {
     if (decoded) registerKind(decoded.kind);
   }, [decoded, registerKind]);
 
+  // Fetch article event inline for kind 30023
+  useEffect(() => {
+    if (!decoded || decoded.kind !== 30023) return;
+    setArticleLoading(true);
+    const handle = nostrRuntime.subscribe(
+      relays,
+      [{ kinds: [30023], authors: [decoded.pubkey], "#d": [decoded.identifier], limit: 1 }],
+      {
+        onEvent: (e) => {
+          setArticleEvent(e);
+          if (!profiles?.get(e.pubkey)) fetchUserProfileThrottled(e.pubkey);
+        },
+        onEose: () => { setArticleLoading(false); handle.unsubscribe(); },
+      }
+    );
+    setTimeout(() => { setArticleLoading(false); handle.unsubscribe(); }, 5000);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [encoded]);
+
   const apps = decoded ? handlersMap.get(decoded.kind) : null;
   const loading = decoded ? !handlersMap.has(decoded.kind) : false;
 
@@ -40,6 +68,41 @@ export const NaddrHandlers: React.FC<{ encoded: string }> = ({ encoded }) => {
   }, [apps, profiles, fetchUserProfileThrottled]);
 
   if (!decoded) return null;
+
+  // Render article inline for kind 30023
+  if (decoded.kind === 30023) {
+    if (articleLoading && !articleEvent) {
+      return (
+        <Box display="flex" alignItems="center" gap={1} sx={{ p: 1.5, mt: 1 }}>
+          <CircularProgress size={14} />
+          <Typography variant="caption" color="text.secondary">Loading article…</Typography>
+        </Box>
+      );
+    }
+    if (articleEvent) {
+      // Show ArticleCard — clicking it navigates to the in-app reader
+      return <ArticleCard event={articleEvent} />;
+    }
+    // Fetch failed: offer in-app navigation via the naddr we already have
+    const naddrForNav = nip19.naddrEncode({
+      kind: decoded.kind,
+      pubkey: decoded.pubkey,
+      identifier: decoded.identifier,
+    });
+    return (
+      <Box sx={{ border: 1, borderColor: "divider", borderRadius: 2, p: 1.5, mt: 1, mb: 0.5, maxWidth: 420 }}>
+        <Button
+          size="small"
+          variant="outlined"
+          startIcon={<MenuBookIcon sx={{ fontSize: "0.85rem !important" }} />}
+          onClick={() => navigate(`/feeds/articles/${naddrForNav}`)}
+          sx={{ borderRadius: 2, textTransform: "none", fontSize: "0.8rem" }}
+        >
+          Read article
+        </Button>
+      </Box>
+    );
+  }
 
   return (
     <Box

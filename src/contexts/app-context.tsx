@@ -8,6 +8,8 @@ import { getCachedProfiles, setCachedProfile } from "../utils/localStorage";
 type AppContextInterface = {
   profiles: Map<string, Profile>;
   commentsMap: Map<string, Event[]>;
+  editsMap: Map<string, Event>;
+  editsHistoryMap: Map<string, Event[]>;
   likesMap: Map<string, Event[]>;
   zapsMap: Map<string, Event[]>;
   repostsMap: Map<string, Event[]>;
@@ -20,6 +22,7 @@ type AppContextInterface = {
   addEventToMap: (event: Event) => void;
   fetchUserProfileThrottled: (pubkey: string) => void;
   fetchCommentsThrottled: (pollEventId: string) => void;
+  fetchEditsThrottled: (eventId: string) => void;
   fetchLikesThrottled: (pollEventId: string) => void;
   fetchZapsThrottled: (pollEventId: string) => void;
   fetchRepostsThrottled: (pollEventId: string) => void;
@@ -123,22 +126,62 @@ export function AppContextProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profilesVersion]);
 
-  // Query runtime for comments map (kind 1 with e tags)
+  // Query runtime for comments map (kind 1 by e-tag, kind 1111 by A/a-tag and E/e-tag)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const commentsMap = useMemo(() => {
-    const events = nostrRuntime.query({ kinds: [1] });
     const map = new Map<string, Event[]>();
 
-    for (const event of events) {
+    const addToMap = (key: string, event: Event) => {
+      const existing = map.get(key) || [];
+      if (!existing.find((e) => e.id === event.id)) {
+        map.set(key, [...existing, event]);
+      }
+    };
+
+    // Kind 1: index by e-tag
+    for (const event of nostrRuntime.query({ kinds: [1] })) {
       const eTag = event.tags.find((tag) => tag[0] === "e");
-      if (eTag) {
-        const targetId = eTag[1];
-        const existing = map.get(targetId) || [];
-        map.set(targetId, [...existing, event]);
+      if (eTag) addToMap(eTag[1], event);
+    }
+
+    // Kind 1111 (NIP-22): index by A/a-tag (addressable ref) AND E/e-tag (event id)
+    for (const event of nostrRuntime.query({ kinds: [1111] })) {
+      for (const tag of event.tags) {
+        if (tag[0] === "A" || tag[0] === "a" || tag[0] === "E" || tag[0] === "e") {
+          if (tag[1]) addToMap(tag[1], event);
+        }
       }
     }
 
     return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataVersion]);
+
+  // Query runtime for edits — builds both latest-edit map and full history map (kind 1010 per NIP-41)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const { editsMap, editsHistoryMap } = useMemo(() => {
+    const latest = new Map<string, Event>();
+    const history = new Map<string, Event[]>();
+
+    const kind1ByEventId = new Map<string, Event>();
+    for (const e of nostrRuntime.query({ kinds: [1] })) kind1ByEventId.set(e.id, e);
+
+    for (const event of nostrRuntime.query({ kinds: [1010] })) {
+      const eTag = event.tags.find((t) => t[0] === "e");
+      if (!eTag?.[1]) continue;
+      const original = kind1ByEventId.get(eTag[1]);
+      // NIP-41: only trust edits signed by the original author
+      if (original && original.pubkey !== event.pubkey) continue;
+      const existing = latest.get(eTag[1]);
+      if (!existing || event.created_at > existing.created_at) latest.set(eTag[1], event);
+      history.set(eTag[1], [...(history.get(eTag[1]) || []), event]);
+    }
+    // Sort each history newest-first
+    Array.from(history.keys()).forEach((k) => {
+      history.set(k, (history.get(k) || []).sort((a: Event, b: Event) => b.created_at - a.created_at));
+    });
+
+    return { editsMap: latest, editsHistoryMap: history };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataVersion]);
 
@@ -235,6 +278,9 @@ export function AppContextProvider({ children }: { children: ReactNode }) {
   const RepostsThrottler = useRef(
     new Throttler(50, pool, addEventsToMap, "reposts", 2500),
   );
+  const EditsThrottler = useRef(
+    new Throttler(50, pool, addEventsToMap, "edits", 3000),
+  );
 
   const fetchUserProfileThrottled = (pubkey: string) => {
     ProfileThrottler.current.addId(pubkey);
@@ -242,6 +288,10 @@ export function AppContextProvider({ children }: { children: ReactNode }) {
 
   const fetchCommentsThrottled = (pollEventId: string) => {
     CommentsThrottler.current.addId(pollEventId);
+  };
+
+  const fetchEditsThrottled = (eventId: string) => {
+    EditsThrottler.current.addId(eventId);
   };
 
   const fetchLikesThrottled = (pollEventId: string) => {
@@ -261,6 +311,8 @@ export function AppContextProvider({ children }: { children: ReactNode }) {
       value={{
         profiles,
         commentsMap,
+        editsMap,
+        editsHistoryMap,
         likesMap,
         zapsMap,
         repostsMap,
@@ -273,6 +325,7 @@ export function AppContextProvider({ children }: { children: ReactNode }) {
         addEventToMap,
         fetchUserProfileThrottled,
         fetchCommentsThrottled,
+        fetchEditsThrottled,
         fetchLikesThrottled,
         fetchZapsThrottled,
         fetchRepostsThrottled,

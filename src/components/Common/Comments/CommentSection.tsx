@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Avatar,
   Button,
@@ -232,6 +232,10 @@ interface CommentSectionProps {
   ancestorPubkeys?: string[];
   showComments: boolean;
   depth?: number;
+  /** NIP-22: pass "30023:pubkey:identifier" to use kind 1111 + #a filter */
+  addressableRef?: string;
+  /** NIP-22: root event kind, e.g. 30023 for articles */
+  rootKind?: number;
 }
 
 const CommentSection: React.FC<CommentSectionProps> = ({
@@ -240,6 +244,8 @@ const CommentSection: React.FC<CommentSectionProps> = ({
   ancestorPubkeys = [],
   showComments,
   depth = 0,
+  addressableRef,
+  rootKind,
 }) => {
   const { showNotification } = useNotification();
   const {
@@ -248,6 +254,10 @@ const CommentSection: React.FC<CommentSectionProps> = ({
     addEventToMap,
     profiles,
   } = useAppContext();
+
+  const isNip22 = !!addressableRef;
+  // For NIP-22 threads, cache key is the addressable ref; otherwise the event id
+  const cacheKey = isNip22 ? addressableRef! : eventId;
 
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [showReplies, setShowReplies] = useState<Map<string, boolean>>(new Map());
@@ -260,11 +270,10 @@ const CommentSection: React.FC<CommentSectionProps> = ({
   const { relays, writeRelays } = useRelays();
 
   const fetchComments = () => {
-    let filter = {
-      kinds: [1],
-      "#e": [eventId],
-    };
-    let handle = nostrRuntime.subscribe(relays, [filter], {
+    // Always fetch kind 1 replies by event id, plus kind 1111 by addressable ref if present
+    const filters: object[] = [{ kinds: [1], "#e": [eventId] }];
+    if (addressableRef) filters.push({ kinds: [1111], "#a": [addressableRef] });
+    const handle = nostrRuntime.subscribe(relays, filters as any, {
       onEvent: addEventToMap,
     });
     return handle;
@@ -282,9 +291,9 @@ const CommentSection: React.FC<CommentSectionProps> = ({
   }, [showComments]);
 
   useEffect(() => {
-    if (!commentsMap?.get(eventId)) {
-      fetchCommentsThrottled(eventId);
-    }
+    // Warm the cache for both the event id and the addressable ref
+    if (!commentsMap?.get(eventId)) fetchCommentsThrottled(eventId);
+    if (addressableRef && !commentsMap?.get(addressableRef)) fetchCommentsThrottled(addressableRef);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -300,15 +309,30 @@ const CommentSection: React.FC<CommentSectionProps> = ({
       .filter((pk) => !mentionedPubkeys.has(pk))
       .map((pk) => ["p", pk]);
 
+    // When replying to a specific comment, match its kind.
+    // Top-level comments follow the root mode (isNip22).
+    const parentEvent = parentId ? comments.find((c) => c.id === parentId) : null;
+    const useNip22 = parentEvent ? parentEvent.kind === 1111 : isNip22;
+
+    const tags = useNip22
+      ? [
+          ...mentionTags,
+          ...pTags,
+          ["A", addressableRef!, "", "root"],
+          ...(rootKind != null ? [["K", String(rootKind)]] : []),
+          ...(parentId ? [["e", parentId, "", "reply"], ["k", "1111"]] : []),
+        ]
+      : [
+          ...mentionTags,
+          ...pTags,
+          ["e", eventId, "", "root"],
+          ...(parentId ? [["e", parentId, "", "reply"]] : []),
+        ];
+
     const commentEvent = {
-      kind: 1,
-      content: content,
-      tags: [
-        ...mentionTags,
-        ...pTags,
-        ["e", eventId, "", "root"],
-        ...(parentId ? [["e", parentId, "", "reply"]] : []),
-      ],
+      kind: useNip22 ? 1111 : 1,
+      content,
+      tags,
       created_at: Math.floor(Date.now() / 1000),
     };
 
@@ -389,7 +413,13 @@ const CommentSection: React.FC<CommentSectionProps> = ({
       });
   };
 
-  const comments = commentsMap?.get(eventId) || [];
+  // Merge comments from both the event id key and the addressable ref key (deduped by id)
+  const comments = useMemo(() => {
+    const byEvent = commentsMap?.get(eventId) || [];
+    const byAddr = addressableRef ? (commentsMap?.get(addressableRef) || []) : [];
+    const seen = new Set<string>();
+    return [...byEvent, ...byAddr].filter((e) => seen.has(e.id) ? false : (seen.add(e.id), true));
+  }, [commentsMap, eventId, addressableRef]);
   const localCommentsMap = new Map((comments || []).map((c) => [c.id, c]));
 
   if (!showComments) {

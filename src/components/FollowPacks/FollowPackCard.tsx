@@ -21,6 +21,7 @@ import { DEFAULT_IMAGE_URL } from "../../utils/constants";
 import OverlappingAvatars from "../Common/OverlappingAvatars";
 import { calculateTimeAgo } from "../../utils/common";
 import { FollowPackMembersDialog } from "./FollowPackMembersDialog";
+import { openProfileTab } from "../../nostr";
 
 interface FollowPackCardProps {
   event: Event;
@@ -193,10 +194,15 @@ export const FollowPackCard: React.FC<FollowPackCardProps> = ({ event }) => {
 
           {/* Author + timestamp */}
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
-            <Avatar src={authorProfile?.picture || DEFAULT_IMAGE_URL} sx={{ width: 20, height: 20 }} />
-            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
-              {authorName}
-            </Typography>
+            <Box
+              sx={{ display: "flex", alignItems: "center", gap: 0.75, cursor: "pointer", "&:hover .author-name": { textDecoration: "underline" } }}
+              onClick={(e) => { e.stopPropagation(); openProfileTab(nip19.npubEncode(event.pubkey), navigate); }}
+            >
+              <Avatar src={authorProfile?.picture || DEFAULT_IMAGE_URL} sx={{ width: 20, height: 20 }} />
+              <Typography className="author-name" variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
+                {authorName}
+              </Typography>
+            </Box>
             <Typography variant="caption" color="text.secondary" sx={{ ml: "auto" }}>
               {calculateTimeAgo(event.created_at)}
             </Typography>

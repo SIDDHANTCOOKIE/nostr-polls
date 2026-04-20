@@ -1,27 +1,12 @@
-import React, { useEffect } from "react";
-import {
-  Avatar,
-  Box,
-  Button,
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  IconButton,
-  List,
-  ListItem,
-  ListItemAvatar,
-  ListItemText,
-  Typography,
-} from "@mui/material";
-import CloseIcon from "@mui/icons-material/Close";
-import { nip19 } from "nostr-tools";
-import { useAppContext } from "../../hooks/useAppContext";
+import React, { useState } from "react";
+import { Button, CircularProgress } from "@mui/material";
+import { EventTemplate } from "nostr-tools";
 import { useUserContext } from "../../hooks/useUserContext";
-import { DEFAULT_IMAGE_URL } from "../../utils/constants";
-import { Nip05Badge } from "../Common/Nip05Badge";
-import { openProfileTab } from "../../nostr";
-import { useNavigate } from "react-router-dom";
-import { useBackClose } from "../../hooks/useBackClose";
+import { useListContext } from "../../hooks/useListContext";
+import { useRelays } from "../../hooks/useRelays";
+import { ProfileListDialog } from "../Common/ProfileListDialog";
+import { signEvent } from "../../nostr";
+import { pool } from "../../singletons";
 
 interface FollowPackMembersDialogProps {
   open: boolean;
@@ -36,102 +21,64 @@ export const FollowPackMembersDialog: React.FC<FollowPackMembersDialogProps> = (
   memberPubkeys,
   packTitle,
 }) => {
-  const { profiles, fetchUserProfileThrottled } = useAppContext();
-  const { user } = useUserContext();
-  const navigate = useNavigate();
-  useBackClose(open, onClose);
+  const { user, setUser } = useUserContext();
+  const { fetchLatestContactList } = useListContext();
+  const { relays } = useRelays();
+  const [followingPks, setFollowingPks] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    if (!open) return;
-    memberPubkeys.forEach((pk) => {
-      if (!profiles?.get(pk)) fetchUserProfileThrottled(pk);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, memberPubkeys.length]);
+  const handleFollow = async (e: React.MouseEvent, pk: string) => {
+    e.stopPropagation();
+    if (!user || followingPks.has(pk)) return;
+    setFollowingPks((prev) => new Set(prev).add(pk));
+    try {
+      const contactEvent = await fetchLatestContactList();
+      const existingTags = contactEvent?.tags || [];
+      const pTags = existingTags.filter(([t]) => t === "p").map(([, p]) => p);
+      if (pTags.includes(pk)) return;
+      const newEvent: EventTemplate = {
+        kind: 3,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [...existingTags, ["p", pk]],
+        content: contactEvent?.content || "",
+      };
+      const signed = await signEvent(newEvent);
+      pool.publish(relays, signed);
+      setUser((prev) =>
+        prev ? { ...prev, follows: [...(prev.follows || []), pk] } : prev
+      );
+    } finally {
+      setFollowingPks((prev) => {
+        const s = new Set(prev);
+        s.delete(pk);
+        return s;
+      });
+    }
+  };
+
+  const renderAction = (pk: string) => {
+    if (!user || user.pubkey === pk || user.follows?.includes(pk)) return undefined;
+    const isLoading = followingPks.has(pk);
+    return (
+      <Button
+        size="small"
+        variant="outlined"
+        disabled={isLoading}
+        sx={{ minWidth: 70 }}
+        onClick={(e) => handleFollow(e, pk)}
+      >
+        {isLoading ? <CircularProgress size={16} color="inherit" /> : "Follow"}
+      </Button>
+    );
+  };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
-      <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", pb: 1 }}>
-        <Box>
-          <Typography variant="h6" component="span">{packTitle}</Typography>
-          <Typography variant="body2" color="text.secondary">
-            {memberPubkeys.length} member{memberPubkeys.length !== 1 ? "s" : ""}
-          </Typography>
-        </Box>
-        <IconButton size="small" onClick={onClose}>
-          <CloseIcon fontSize="small" />
-        </IconButton>
-      </DialogTitle>
-      <DialogContent sx={{ p: 0 }}>
-        <List dense disablePadding>
-          {memberPubkeys.map((pk) => {
-            const profile = profiles?.get(pk);
-            const npub = nip19.npubEncode(pk);
-            const name =
-              profile?.display_name ||
-              profile?.name ||
-              npub.slice(0, 8) + "…";
-
-            return (
-              <ListItem
-                key={pk}
-                sx={{
-                  px: 2,
-                  py: 0.75,
-                  cursor: "pointer",
-                  "&:hover": { bgcolor: "action.hover" },
-                  "&:hover .profile-name, &:focus-visible .profile-name": {
-                    textDecoration: "underline",
-                  },
-                }}
-                onClick={() => {
-                  onClose();
-                  openProfileTab(npub, navigate);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    onClose();
-                    openProfileTab(npub, navigate);
-                  }
-                }}
-                role="button"
-                tabIndex={0}
-                secondaryAction={
-                  user && user.pubkey !== pk && !user.follows?.includes(pk) ? (
-                    <Button size="small" variant="outlined" sx={{ minWidth: 70 }}>
-                      Follow
-                    </Button>
-                  ) : undefined
-                }
-              >
-                <ListItemAvatar sx={{ minWidth: 44 }}>
-                  <Avatar
-                    src={profile?.picture || DEFAULT_IMAGE_URL}
-                    sx={{ width: 36, height: 36 }}
-                  />
-                </ListItemAvatar>
-                <ListItemText
-                  primary={
-                    <Typography className="profile-name" variant="body2" fontWeight={500} noWrap>
-                      {name}
-                    </Typography>
-                  }
-                  secondary={
-                    profile?.nip05 ? (
-                      <Nip05Badge nip05={profile.nip05} pubkey={pk} />
-                    ) : (
-                      <Typography variant="caption" color="text.secondary" noWrap>
-                        {npub.slice(0, 16)}…
-                      </Typography>
-                    )
-                  }
-                />
-              </ListItem>
-            );
-          })}
-        </List>
-      </DialogContent>
-    </Dialog>
+    <ProfileListDialog
+      open={open}
+      onClose={onClose}
+      pubkeys={memberPubkeys}
+      title={packTitle}
+      subtitle={`${memberPubkeys.length} member${memberPubkeys.length !== 1 ? "s" : ""}`}
+      renderAction={renderAction}
+    />
   );
 };

@@ -88,6 +88,18 @@ export const fetchReposts = async (
   }
 };
 
+export const fetchEdits = async (
+  eventIds: string[],
+  _pool: SimplePool,
+  relays: string[] = defaultRelays
+) => {
+  const result = await nostrRuntime.querySync(relays, {
+    kinds: [1010],
+    "#e": eventIds,
+  });
+  return result;
+};
+
 export const fetchComments = async (
   eventIds: string[],
   _pool: SimplePool,

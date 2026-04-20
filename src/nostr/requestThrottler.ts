@@ -1,8 +1,8 @@
 import { SimplePool } from "nostr-tools";
-import { fetchComments, fetchLikes, fetchUserProfiles, fetchZaps } from ".";
+import { fetchComments, fetchEdits, fetchLikes, fetchUserProfiles, fetchZaps } from ".";
 import { Event } from "nostr-tools/lib/types/core";
 
-type QueueType = "profiles" | "comments" | "likes" | "zaps" | "reposts";
+type QueueType = "profiles" | "comments" | "edits" | "likes" | "zaps" | "reposts";
 
 export class Throttler {
   private queue: string[] = [];
@@ -55,6 +55,9 @@ export class Throttler {
     }
     if (this.queueType === "comments") {
       results = await fetchComments(IdsToProcess, this.pool);
+    }
+    if (this.queueType === "edits") {
+      results = await fetchEdits(IdsToProcess, this.pool);
     }
     if (this.queueType === "likes") {
       results = await fetchLikes(IdsToProcess, this.pool);

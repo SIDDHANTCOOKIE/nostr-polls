@@ -56,7 +56,7 @@ const OverlappingAvatars: React.FC<OverlappingAvatarsProps> = ({
             cursor: "pointer",
           }}
           src={profiles?.get(id)?.picture || DEFAULT_IMAGE_URL}
-          onClick={() => openProfileTab(nip19.npubEncode(id), navigate)}
+          onClick={(e) => { e.stopPropagation(); openProfileTab(nip19.npubEncode(id), navigate); }}
         />
       ))}
       {excessIds > 0 ? (

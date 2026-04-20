@@ -13,6 +13,7 @@ import { alpha } from "@mui/material/styles";
 import HowToVoteIcon from "@mui/icons-material/HowToVote";
 import TagIcon from "@mui/icons-material/Tag";
 import ArticleIcon from "@mui/icons-material/Article";
+import BookIcon from "@mui/icons-material/MenuBook";
 import MovieIcon from "@mui/icons-material/Movie";
 import PeopleIcon from "@mui/icons-material/People";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
@@ -44,6 +45,10 @@ const MOBILE_SUB_ITEMS: Record<string, { key: string; label: string }[]> = {
     { key: "following", label: "Following" },
     { key: "bookmarked", label: "Bookmarked" },
   ],
+  articles: [
+    { key: "global", label: "Global" },
+    { key: "following", label: "Following" },
+  ],
 };
 
 const FEED_STORAGE_KEYS: Record<string, string> = {
@@ -51,6 +56,7 @@ const FEED_STORAGE_KEYS: Record<string, string> = {
   notes: "pollerama:lastNotesTab",
   topics: "pollerama:lastTopicsTab",
   "follow-packs": "pollerama:followPacksSource",
+  articles: "pollerama:articlesSource",
 };
 
 const FEED_DEFAULT_SUB: Record<string, string> = {
@@ -58,12 +64,14 @@ const FEED_DEFAULT_SUB: Record<string, string> = {
   notes: "discover",
   topics: "interests",
   "follow-packs": "global",
+  articles: "global",
 };
 
 const feedOptions: { value: string; label: string; Icon: SvgIconComponent }[] = [
   { value: "polls",        label: "Polls",        Icon: HowToVoteIcon },
   { value: "topics",       label: "Topics",       Icon: TagIcon },
   { value: "notes",        label: "Notes",        Icon: ArticleIcon },
+  { value: "articles",     label: "Articles",     Icon: BookIcon },
   { value: "movies",       label: "Movies",       Icon: MovieIcon },
   { value: "follow-packs", label: "Packs",        Icon: PeopleIcon },
 ];

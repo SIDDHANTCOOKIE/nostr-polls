@@ -21,6 +21,7 @@ import { Notes } from "../Notes";
 import PollResponseForm from "../PollResponse/PollResponseForm";
 import { FollowPackMembersDialog } from "./FollowPackMembersDialog";
 import { calculateTimeAgo } from "../../utils/common";
+import { openProfileTab } from "../../nostr";
 
 const BATCH_SIZE = 20;
 
@@ -205,12 +206,15 @@ const FollowPackDetail: React.FC = () => {
 
           {/* Author + member count row */}
           <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mt: 1.5, flexWrap: "wrap" }}>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+            <Box
+              sx={{ display: "flex", alignItems: "center", gap: 0.75, cursor: "pointer", "&:hover .author-name": { textDecoration: "underline" } }}
+              onClick={() => openProfileTab(nip19.npubEncode(packEvent.pubkey), navigate)}
+            >
               <Avatar
                 src={authorProfile?.picture || DEFAULT_IMAGE_URL}
                 sx={{ width: 22, height: 22 }}
               />
-              <Typography variant="caption" color="text.secondary">
+              <Typography className="author-name" variant="caption" color="text.secondary">
                 {authorName}
               </Typography>
               <Typography variant="caption" color="text.secondary">

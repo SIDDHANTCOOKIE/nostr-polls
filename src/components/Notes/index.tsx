@@ -16,7 +16,10 @@ import {
   Collapse,
   Box,
   CircularProgress,
+  TextField,
+  Chip,
 } from "@mui/material";
+import EditIcon from "@mui/icons-material/Edit";
 import { Event, EventTemplate, nip19 } from "nostr-tools";
 import { TextWithImages } from "../Common/Parsers/TextWithImages";
 import { useEffect, useRef, useState } from "react";
@@ -68,7 +71,7 @@ export const Notes: React.FC<NotesProps> = ({
   showReason,
 }) => {
   const navigate = useNavigate();
-  const { profiles, fetchUserProfileThrottled, aiSettings } = useAppContext();
+  const { profiles, fetchUserProfileThrottled, aiSettings, editsMap, editsHistoryMap, fetchEditsThrottled, addEventToMap } = useAppContext();
   let { user, requestLogin, setUser } = useUserContext();
   let { relays, writeRelays } = useRelays();
   let { fetchLatestContactList, unfollowContact } = useListContext();
@@ -99,6 +102,12 @@ export const Notes: React.FC<NotesProps> = ({
   const [reportUserDialogOpen, setReportUserDialogOpen] = useState(false);
   const [showReportedAnyway, setShowReportedAnyway] = useState(false);
 
+  // Edit state
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editHistoryOpen, setEditHistoryOpen] = useState(false);
+  const [editContent, setEditContent] = useState("");
+  const [isPublishingEdit, setIsPublishingEdit] = useState(false);
+
   // Relay source
   const eventRelays = useEventRelays(event.id);
   const [relayModalOpen, setRelayModalOpen] = useState(false);
@@ -106,6 +115,29 @@ export const Notes: React.FC<NotesProps> = ({
   // Broadcast state
   const [isBroadcasting, setIsBroadcasting] = useState(false);
   const { result: broadcastResult, open: diagnosticOpen, setOpen: setDiagnosticOpen, title: diagnosticTitle, openModal: openDiagnostic, retry } = usePublishDiagnostic();
+
+  const handlePublishEdit = async () => {
+    if (!user || isPublishingEdit) return;
+    setIsPublishingEdit(true);
+    try {
+      const newEvent: EventTemplate = {
+        kind: 1010,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [["e", event.id]],
+        content: editContent,
+      };
+      const signed = await signEvent(newEvent);
+      // Add to runtime immediately so editsMap reflects the change without waiting for the throttler
+      addEventToMap(signed);
+      setEditDialogOpen(false);
+      const res = await waitForPublish(writeRelays, signed);
+      openDiagnostic(signed, res, "Edit publish results");
+    } catch {
+      showNotification("Failed to publish edit", "error");
+    } finally {
+      setIsPublishingEdit(false);
+    }
+  };
 
   const handleBroadcast = async () => {
     if (isBroadcasting) return;
@@ -125,8 +157,11 @@ export const Notes: React.FC<NotesProps> = ({
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
 
+  const latestEdit = editsMap?.get(event.id);
+  const displayContent = latestEdit ? latestEdit.content : event.content;
+  const isEdited = !!latestEdit;
   // Check if post is long enough to warrant summarization (500+ chars)
-  const isLongPost = event.content.length > 500;
+  const isLongPost = displayContent.length > 500;
 
   const addToContacts = async () => {
     if (!user) {
@@ -259,7 +294,7 @@ export const Notes: React.FC<NotesProps> = ({
     try {
       const result = await aiService.summarizePost({
         model: aiSettings.model,
-        text: event.content,
+        text: displayContent,
       });
 
       if (result.success && result.data) {
@@ -326,6 +361,7 @@ export const Notes: React.FC<NotesProps> = ({
     if (!profiles?.has(event.pubkey)) {
       fetchUserProfileThrottled(event.pubkey);
     }
+    fetchEditsThrottled(event.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [event.pubkey]);
 
@@ -452,7 +488,20 @@ export const Notes: React.FC<NotesProps> = ({
                 </IconButton>
               </Box>
             }
-            subheader={timeAgo}
+            subheader={
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+                <span>{timeAgo}</span>
+                {isEdited && (
+                  <Chip
+                    label="Edited"
+                    size="small"
+                    variant="outlined"
+                    onClick={(e) => { e.stopPropagation(); setEditHistoryOpen(true); }}
+                    sx={{ height: 18, fontSize: "0.7rem", cursor: "pointer" }}
+                  />
+                )}
+              </Box>
+            }
             sx={{ m: 0, pl: 2, pt: 1 }}
           />
 
@@ -501,6 +550,19 @@ export const Notes: React.FC<NotesProps> = ({
             <MenuItem onClick={handleCopyNevent}>Copy Event Id</MenuItem>
             <MenuItem onClick={copyNoteUrl}>Copy Link</MenuItem>
             <MenuItem onClick={handleCopyNpub}>Copy Author npub</MenuItem>
+            {user && user.pubkey === event.pubkey && (
+              <MenuItem
+                onClick={() => {
+                  setEditContent(displayContent);
+                  setEditDialogOpen(true);
+                  handleCloseMenu();
+                }}
+                sx={{ gap: 1 }}
+              >
+                <EditIcon fontSize="small" />
+                Edit
+              </MenuItem>
+            )}
             {user && (
               <MenuItem
                 onClick={() => {
@@ -585,7 +647,7 @@ export const Notes: React.FC<NotesProps> = ({
                 p: 2,
               }}
             >
-              <TextWithImages content={event.content} tags={event.tags} />
+              <TextWithImages content={displayContent} tags={event.tags} />
 
               {replyingToNevent ? (
                 <div style={{ borderRadius: "2px", borderColor: "grey" }}>
@@ -697,6 +759,55 @@ export const Notes: React.FC<NotesProps> = ({
         onClose={() => setRelayModalOpen(false)}
         relays={eventRelays}
       />
+
+      <Dialog open={editHistoryOpen} onClose={() => setEditHistoryOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Edit history</DialogTitle>
+        <DialogContent dividers sx={{ p: 0 }}>
+          {(editsHistoryMap?.get(event.id) || []).map((edit, i) => (
+            <Box key={edit.id} sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: "divider" }}>
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
+                {i === 0 ? "Latest · " : ""}{calculateTimeAgo(edit.created_at)}
+              </Typography>
+              <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>{edit.content}</Typography>
+            </Box>
+          ))}
+          <Box sx={{ px: 2, py: 1.5 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
+              Original · {calculateTimeAgo(event.created_at)}
+            </Typography>
+            <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>{event.content}</Typography>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditHistoryOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Edit note</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            multiline
+            fullWidth
+            minRows={4}
+            maxRows={12}
+            value={editContent}
+            onChange={(e) => setEditContent(e.target.value)}
+            sx={{ mt: 1 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditDialogOpen(false)} disabled={isPublishingEdit}>Cancel</Button>
+          <Button
+            variant="contained"
+            disabled={isPublishingEdit || editContent.trim() === displayContent.trim()}
+            onClick={handlePublishEdit}
+          >
+            {isPublishingEdit ? <CircularProgress size={18} color="inherit" /> : "Publish"}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 };
