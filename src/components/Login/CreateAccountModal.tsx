@@ -1,3 +1,4 @@
+import { copyToClipboard } from "../../utils/common";
 // components/Login/CreateAccountModal.tsx
 import React, { useState } from "react";
 import {
@@ -173,7 +174,7 @@ export const CreateAccountModal: React.FC<Props> = ({ open, onClose }) => {
 export const MonospaceDisplay: React.FC<{ value: string }> = ({ value }) => {
   let notification = useNotification();
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(value);
+    await copyToClipboard(value);
     notification.showNotification("Copied to clipboard!");
   };
 

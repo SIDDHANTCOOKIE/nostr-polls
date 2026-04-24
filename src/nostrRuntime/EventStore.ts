@@ -9,6 +9,12 @@ import {
 import { eventMatchesFilter, extractTagKeys } from './utils/filterUtils';
 import { EventCallback } from './types';
 
+function isExpired(event: Event): boolean {
+  const exp = event.tags.find((t) => t[0] === 'expiration')?.[1];
+  if (!exp) return false;
+  return Math.floor(Date.now() / 1000) > Number(exp);
+}
+
 /**
  * EventStore - Multi-indexed event storage with reactive subscriptions
  *
@@ -231,7 +237,7 @@ export class EventStore {
       if (event && eventMatchesFilter(event, filter)) {
         const deleter = this.deletedIds.get(eventId);
         if (!deleter || deleter !== event.pubkey) {
-          matchingEvents.push(event);
+          if (!isExpired(event)) matchingEvents.push(event);
         }
       }
     }
@@ -255,6 +261,7 @@ export class EventStore {
     if (!event) return undefined;
     const deleter = this.deletedIds.get(id);
     if (deleter && deleter === event.pubkey) return undefined;
+    if (isExpired(event)) return undefined;
     return event;
   }
 

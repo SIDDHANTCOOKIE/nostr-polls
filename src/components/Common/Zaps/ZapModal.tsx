@@ -1,3 +1,4 @@
+import { copyToClipboard } from "../../../utils/common";
 import React, { useEffect, useState } from "react";
 import {
   Box,
@@ -157,7 +158,7 @@ const ZapModal: React.FC<ZapModalProps> = ({
 
   const copyInvoice = async () => {
     if (invoice) {
-      await navigator.clipboard.writeText(invoice);
+      await copyToClipboard(invoice);
       setCopySuccess(true);
     }
   };

@@ -26,7 +26,7 @@ import { generateSecretKey, getPublicKey, nip19 } from "nostr-tools";
 import { openProfileTab, signEvent } from "../../nostr";
 import { useRelays } from "../../hooks/useRelays";
 import { useListContext } from "../../hooks/useListContext";
-import { calculateTimeAgo } from "../../utils/common";
+import { copyToClipboard, calculateTimeAgo } from "../../utils/common";
 import { DEFAULT_IMAGE_URL } from "../../utils/constants";
 import { useAppContext } from "../../hooks/useAppContext";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
@@ -328,7 +328,7 @@ const PollResponseForm: React.FC<PollResponseFormProps> = ({
   const handleCopyNevent = async () => {
     const nevent = nip19.neventEncode({ id: pollEvent.id });
     try {
-      await navigator.clipboard.writeText(nevent);
+      await copyToClipboard(nevent);
       showNotification(NOTIFICATION_MESSAGES.NEVENT_COPIED, "success");
     } catch {
       showNotification(NOTIFICATION_MESSAGES.COPY_FAILED, "error");
@@ -340,7 +340,7 @@ const PollResponseForm: React.FC<PollResponseFormProps> = ({
   const copyPollUrl = async () => {
     const nevent = nip19.neventEncode({ id: pollEvent.id });
     try {
-      await navigator.clipboard.writeText(`${getAppBaseUrl()}/respond/${nevent}`);
+      await copyToClipboard(`${getAppBaseUrl()}/respond/${nevent}`);
       showNotification(NOTIFICATION_MESSAGES.POLL_URL_COPIED, "success");
     } catch {
       showNotification(NOTIFICATION_MESSAGES.POLL_URL_COPY_FAILED, "error");
@@ -349,7 +349,7 @@ const PollResponseForm: React.FC<PollResponseFormProps> = ({
 
   const handleCopyNpub = async () => {
     try {
-      await navigator.clipboard.writeText(nip19.npubEncode(pollEvent.pubkey));
+      await copyToClipboard(nip19.npubEncode(pollEvent.pubkey));
       showNotification(NOTIFICATION_MESSAGES.NPUB_COPIED, "success");
     } catch {
       showNotification(NOTIFICATION_MESSAGES.COPY_FAILED, "error");
@@ -360,7 +360,7 @@ const PollResponseForm: React.FC<PollResponseFormProps> = ({
 
   const copyRawEvent = async () => {
     try {
-      await navigator.clipboard.writeText(JSON.stringify(pollEvent, null, 2));
+      await copyToClipboard(JSON.stringify(pollEvent, null, 2));
       showNotification(NOTIFICATION_MESSAGES.RAW_EVENT_COPIED, "success");
     } catch {
       showNotification(NOTIFICATION_MESSAGES.COPY_FAILED, "error");

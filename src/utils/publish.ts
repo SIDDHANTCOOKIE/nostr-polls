@@ -1,12 +1,12 @@
 import { Event } from "nostr-tools";
-import { pool, nostrRuntime } from "../singletons";
+import { nostrRuntime } from "../singletons";
 import { getNip65InboxRelays } from "../nostr/OutboxService";
 
 const PUBLISH_TIMEOUT_MS = 5000;
 
 export interface RelayPublishResult {
   relay: string;
-  status: "accepted" | "rejected" | "timeout";
+  status: "accepted" | "rejected" | "timeout" | "failed";
   /** Rejection reason from the relay, or undefined on success/timeout */
   message?: string;
   /** Milliseconds from publish start to relay response */
@@ -26,7 +26,7 @@ async function attemptPublish(
   event: Event,
   globalStart: number,
 ): Promise<RelayPublishResult[]> {
-  const promises = pool.publish(relays, event);
+  const promises = nostrRuntime.publish(relays, event);
   return Promise.all(
     promises.map((p, i) => {
       const relayStart = Date.now();
@@ -42,13 +42,19 @@ async function attemptPublish(
           latencyMs: Date.now() - relayStart,
         }))
         .catch((err): RelayPublishResult => {
-          const msg = err instanceof Error ? err.message : String(err);
-          return {
-            relay: relays[i],
-            status: msg === "timeout" ? "timeout" : "rejected",
-            message: msg === "timeout" ? undefined : msg,
-            latencyMs: Date.now() - relayStart,
-          };
+          const raw = err instanceof Error ? err.message : String(err);
+          if (raw === "timeout") {
+            return { relay: relays[i], status: "timeout", latencyMs: Date.now() - relayStart };
+          }
+          if (isConnectionError(raw)) {
+            return {
+              relay: relays[i],
+              status: "failed",
+              message: friendlyConnectionError(raw),
+              latencyMs: Date.now() - relayStart,
+            };
+          }
+          return { relay: relays[i], status: "rejected", message: raw, latencyMs: Date.now() - relayStart };
         });
     })
   );
@@ -66,18 +72,20 @@ function isConnectionError(msg: string | undefined): boolean {
   );
 }
 
+function friendlyConnectionError(msg: string): string {
+  const lower = msg.toLowerCase();
+  if (lower.includes("sending on closed") || lower.includes("closed by us")) return "Connection closed before send";
+  if (lower.includes("websocket closed") || lower.includes("closed connection")) return "Connection dropped";
+  if (lower.includes("websocket")) return "Relay unreachable";
+  return "Connection failed";
+}
+
 export async function waitForPublish(
   relays: string[],
   event: Event
 ): Promise<PublishResult> {
   const total = relays.length;
   if (total === 0) return { ok: false, accepted: 0, total: 0, relayResults: [] };
-
-  // Evict any relay objects with a dead WebSocket before attempting publish.
-  // Subscriptions call relay.close() when they end, which closes the socket but
-  // leaves the stale relay object in pool.relays — ensureRelay() would reuse it
-  // and the send() would fail immediately with a WebSocket error.
-  nostrRuntime.cleanStaleRelays(relays);
 
   const globalStart = Date.now();
   let relayResults = await attemptPublish(relays, event, globalStart);

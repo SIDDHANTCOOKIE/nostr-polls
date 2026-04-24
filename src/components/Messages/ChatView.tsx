@@ -1,3 +1,4 @@
+import { copyToClipboard } from "../../utils/common";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Box,
@@ -338,7 +339,7 @@ const ChatView: React.FC = () => {
         onClose={() => setContextMenuMsg(null)}
         onReact={handleReaction}
         onReply={setReplyTo}
-        onCopy={(content) => navigator.clipboard.writeText(content)}
+        onCopy={(content) => copyToClipboard(content)}
         onOpenEmojiPicker={setPickerForMsgId}
       />
 

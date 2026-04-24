@@ -11,7 +11,12 @@ import {
   Tooltip,
   LinearProgress,
 } from "@mui/material";
+import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import dayjs, { Dayjs } from "dayjs";
 import AttachFileIcon from "@mui/icons-material/AttachFile";
+import TimerOutlinedIcon from "@mui/icons-material/TimerOutlined";
 import { useNotification } from "../../contexts/notification-context";
 import { useUserContext } from "../../hooks/useUserContext";
 import { useNavigate } from "react-router-dom";
@@ -53,6 +58,9 @@ const NoteTemplateForm: React.FC<{
   const [enhancementSuggestions, setEnhancementSuggestions] = useState<any>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [expiresInSeconds, setExpiresInSeconds] = useState<number | null>(null);
+  const [customExpiryDate, setCustomExpiryDate] = useState<Dayjs | null>(null);
+  const [showExpiry, setShowExpiry] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Ref so async upload callbacks always see the latest content value
   const eventContentRef = useRef(eventContent);
@@ -148,6 +156,12 @@ const NoteTemplateForm: React.FC<{
       }
 
       const mentionTags = extractMentionTags(eventContent);
+      const now = Math.floor(Date.now() / 1000);
+      const expirationTs = customExpiryDate
+        ? customExpiryDate.unix()
+        : expiresInSeconds
+        ? now + expiresInSeconds
+        : null;
       const noteEvent = {
         kind: NOSTR_EVENT_KINDS.TEXT_NOTE,
         content: finalContent,
@@ -156,8 +170,9 @@ const NoteTemplateForm: React.FC<{
           ...topics.map((tag) => ["t", tag]),
           ...mentionTags,
           ...quoteTags,
+          ...(expirationTs ? [["expiration", String(expirationTs)]] : []),
         ],
-        created_at: Math.floor(Date.now() / 1000),
+        created_at: now,
       };
       setIsSubmitting(true);
       const signedEvent = await signEvent(noteEvent, user?.privateKey);
@@ -228,8 +243,8 @@ const NoteTemplateForm: React.FC<{
     <form onSubmit={handleSubmit}>
       <Stack spacing={4}>
         <Box>
-          {/* Toolbar: attach file */}
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 0.5 }}>
+          {/* Toolbar: attach file + expiration */}
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5, flexWrap: "wrap" }}>
             <Tooltip title="Attach image or video (Blossom)">
               <span>
                 <IconButton
@@ -251,9 +266,75 @@ const NoteTemplateForm: React.FC<{
                 </IconButton>
               </span>
             </Tooltip>
-            <Typography variant="caption" color="text.secondary">
-              Paste or drag &amp; drop images/videos to attach
-            </Typography>
+
+            {/* Expiration toggle */}
+            <Tooltip title={showExpiry ? "Hide expiration" : "Set expiration (NIP-40)"}>
+              <IconButton
+                size="small"
+                onClick={() => {
+                  setShowExpiry((v) => !v);
+                  if (showExpiry) {
+                    setExpiresInSeconds(null);
+                    setCustomExpiryDate(null);
+                  }
+                }}
+                sx={{
+                  border: "1px solid",
+                  borderColor: (expiresInSeconds || customExpiryDate) ? "warning.main" : "primary.main",
+                  borderRadius: "50%",
+                  color: (expiresInSeconds || customExpiryDate) ? "warning.main" : "primary.main",
+                }}
+              >
+                <TimerOutlinedIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+
+            {showExpiry && (
+              <>
+                {[
+                  { label: "1h", seconds: 3600 },
+                  { label: "6h", seconds: 21600 },
+                  { label: "24h", seconds: 86400 },
+                  { label: "7d", seconds: 604800 },
+                ].map(({ label, seconds }) => (
+                  <Chip
+                    key={label}
+                    label={label}
+                    size="small"
+                    variant={expiresInSeconds === seconds ? "filled" : "outlined"}
+                    color={expiresInSeconds === seconds ? "warning" : "default"}
+                    onClick={() => {
+                      setCustomExpiryDate(null);
+                      setExpiresInSeconds(expiresInSeconds === seconds ? null : seconds);
+                    }}
+                    sx={{ height: 22, fontSize: "0.7rem" }}
+                  />
+                ))}
+                <LocalizationProvider dateAdapter={AdapterDayjs}>
+                  <DateTimePicker
+                    value={customExpiryDate}
+                    onChange={(val) => {
+                      setCustomExpiryDate(val);
+                      if (val) setExpiresInSeconds(null);
+                    }}
+                    minDateTime={dayjs().add(1, "minute")}
+                    slotProps={{
+                      textField: {
+                        size: "small",
+                        placeholder: "custom",
+                        sx: {
+                          width: 175,
+                          "& .MuiInputBase-root": { height: 24, fontSize: "0.75rem" },
+                          "& .MuiOutlinedInput-notchedOutline": {
+                            borderColor: customExpiryDate ? "warning.main" : undefined,
+                          },
+                        },
+                      },
+                    }}
+                  />
+                </LocalizationProvider>
+              </>
+            )}
           </Box>
 
           {/* Upload progress bar */}

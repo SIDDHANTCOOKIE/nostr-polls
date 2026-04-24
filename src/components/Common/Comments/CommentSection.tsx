@@ -23,7 +23,7 @@ import { Event, nip19 } from "nostr-tools";
 import { DEFAULT_IMAGE_URL } from "../../../utils/constants";
 import { useUserContext } from "../../../hooks/useUserContext";
 import { TextWithImages } from "../Parsers/TextWithImages";
-import { calculateTimeAgo } from "../../../utils/common";
+import { copyToClipboard, calculateTimeAgo } from "../../../utils/common";
 import CommentInput from "./CommentInput";
 import { extractMentionTags } from '../../EventCreator/MentionTextArea';
 import { getColorsWithTheme } from "../../../styles/theme";
@@ -104,15 +104,15 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, depth, commentAncest
   if (!commentUser) fetchUserProfileThrottled(comment.pubkey);
 
   const handleCopyNevent = () => {
-    navigator.clipboard.writeText(nip19.neventEncode({ id: comment.id }));
+    copyToClipboard(nip19.neventEncode({ id: comment.id }));
     setMenuAnchor(null);
   };
   const handleCopyLink = () => {
-    navigator.clipboard.writeText(`${getAppBaseUrl()}/note/${nip19.neventEncode({ id: comment.id })}`);
+    copyToClipboard(`${getAppBaseUrl()}/note/${nip19.neventEncode({ id: comment.id })}`);
     setMenuAnchor(null);
   };
   const handleCopyNpub = () => {
-    navigator.clipboard.writeText(nip19.npubEncode(comment.pubkey));
+    copyToClipboard(nip19.npubEncode(comment.pubkey));
     setMenuAnchor(null);
   };
 

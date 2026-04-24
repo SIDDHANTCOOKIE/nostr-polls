@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom";
 import { PrepareNote } from "../../Notes/PrepareNote";
 import { nip19 } from "nostr-tools";
-import { isImageUrl } from "../../../utils/common";
+import { isImageUrl, copyToClipboard } from "../../../utils/common";
 import { useAppContext } from "../../../hooks/useAppContext";
 import { DEFAULT_IMAGE_URL } from "../../../utils/constants";
 import { Box, Button, IconButton, Tooltip, Typography } from "@mui/material";
@@ -218,7 +218,7 @@ const LightningInvoiceParser = ({
 
   const handleCopy = (e: React.MouseEvent) => {
     e.preventDefault();
-    navigator.clipboard.writeText(part);
+    copyToClipboard(part);
   };
 
   return (

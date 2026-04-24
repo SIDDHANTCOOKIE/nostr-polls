@@ -1,3 +1,17 @@
+export async function copyToClipboard(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    return navigator.clipboard.writeText(text);
+  }
+  // Fallback for non-HTTPS contexts (HTTP over LAN, IPv6, etc.)
+  const el = document.createElement("textarea");
+  el.value = text;
+  el.style.cssText = "position:fixed;top:-9999px;left:-9999px;opacity:0";
+  document.body.appendChild(el);
+  el.select();
+  document.execCommand("copy");
+  document.body.removeChild(el);
+}
+
 export const extractHashtags = (text: string): string[] => {
   const matches = text.matchAll(/#(\w+)/g);
   return Array.from(new Set(Array.from(matches, (m) => m[1].toLowerCase())));

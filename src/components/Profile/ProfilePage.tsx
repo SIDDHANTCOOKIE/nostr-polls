@@ -1,3 +1,4 @@
+import { copyToClipboard } from "../../utils/common";
 import React, { useCallback, useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
@@ -401,7 +402,7 @@ const ProfilePage: React.FC = () => {
                   <IconButton
                     size="small"
                     onClick={() => {
-                      navigator.clipboard.writeText(npub);
+                      copyToClipboard(npub);
                       showNotification("npub copied to clipboard", "success");
                     }}
                   >

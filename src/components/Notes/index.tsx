@@ -27,7 +27,7 @@ import { useNavigate } from "react-router-dom";
 import { useAppContext } from "../../hooks/useAppContext";
 import { DEFAULT_IMAGE_URL } from "../../utils/constants";
 import { openProfileTab, signEvent } from "../../nostr";
-import { calculateTimeAgo } from "../../utils/common";
+import { copyToClipboard, calculateTimeAgo } from "../../utils/common";
 import { getAppBaseUrl } from "../../utils/platform";
 import { PrepareNote } from "./PrepareNote";
 import { FeedbackMenu } from "../FeedbackMenu";
@@ -58,6 +58,14 @@ import { RelaySourceModal } from "../Common/RelaySourceModal";
 import { ClientChip } from "../Common/ClientChip";
 import { PublishDiagnosticModal } from "../Common/PublishDiagnosticModal";
 import { useEventRelays } from "../../hooks/useEventRelays";
+
+function formatTimeRemaining(expTs: number): string | null {
+  const secs = expTs - Math.floor(Date.now() / 1000);
+  if (secs <= 0) return null;
+  if (secs < 3600) return `${Math.ceil(secs / 60)}m`;
+  if (secs < 86400) return `${Math.ceil(secs / 3600)}h`;
+  return `${Math.ceil(secs / 86400)}d`;
+}
 
 interface NotesProps {
   event: Event;
@@ -193,7 +201,7 @@ export const Notes: React.FC<NotesProps> = ({
       kind: event.kind,
     });
     try {
-      await navigator.clipboard.writeText(
+      await copyToClipboard(
         `${getAppBaseUrl()}/note/${nevent}`
       );
       showNotification(NOTIFICATION_MESSAGES.EVENT_COPIED, "success");
@@ -257,7 +265,7 @@ export const Notes: React.FC<NotesProps> = ({
 
   const handleCopyNevent = () => {
     const nevent = nip19.neventEncode({ id: event.id });
-    navigator.clipboard.writeText(nevent).then(() => {
+    copyToClipboard(nevent).then(() => {
       setSnackbarOpen(true);
     });
     handleCloseMenu();
@@ -266,7 +274,7 @@ export const Notes: React.FC<NotesProps> = ({
   const handleCopyNpub = async () => {
     const npub = nip19.npubEncode(event.pubkey);
     try {
-      await navigator.clipboard.writeText(npub);
+      await copyToClipboard(npub);
       showNotification(NOTIFICATION_MESSAGES.NPUB_COPIED, "success");
     } catch (error) {
       console.error("Failed to copy npub:", error);
@@ -383,6 +391,8 @@ export const Notes: React.FC<NotesProps> = ({
   useResizeObserver(contentRef, checkOverflow);
 
   const timeAgo = calculateTimeAgo(event.created_at);
+  const expirationTs = event.tags.find((t) => t[0] === "expiration")?.[1];
+  const expiresIn = expirationTs ? formatTimeRemaining(Number(expirationTs)) : null;
 
   if (deleted && !diagnosticOpen) return null;
 
@@ -516,6 +526,15 @@ export const Notes: React.FC<NotesProps> = ({
                     variant="outlined"
                     onClick={(e) => { e.stopPropagation(); setEditHistoryOpen(true); }}
                     sx={{ height: 18, fontSize: "0.7rem", cursor: "pointer" }}
+                  />
+                )}
+                {expiresIn && (
+                  <Chip
+                    label={`⏳ ${expiresIn}`}
+                    size="small"
+                    color="warning"
+                    variant="outlined"
+                    sx={{ height: 18, fontSize: "0.7rem" }}
                   />
                 )}
               </Box>
