@@ -13,6 +13,8 @@ import { useNotification } from "../../../contexts/notification-context";
 import { NOTIFICATION_MESSAGES } from "../../../constants/notifications";
 import { nostrRuntime } from "../../../singletons";
 import ZapModal from "./ZapModal";
+import ZapDetailsModal from "./ZapDetailsModal";
+import { useZaps } from "../../../contexts/ZapProvider";
 
 interface ZapProps {
   pollEvent: Event;
@@ -24,50 +26,49 @@ const Wrapper = styled("div")(({ theme }) => ({
   }),
 }));
 
+const LONG_PRESS_MS = 500;
+
 const Zap: React.FC<ZapProps> = ({ pollEvent }) => {
-  const { fetchZapsThrottled, zapsMap, profiles, addEventToMap } = useAppContext();
+  const { profiles, addEventToMap } = useAppContext();
+  const { registerEventId, getZapInfos, getTotalSats, addZapEvent } = useZaps();
   const { user } = useUserContext();
-  const [hasZapped, setHasZapped] = useState<boolean>(false);
-  const [modalOpen, setModalOpen] = useState(false);
+  const [zapModalOpen, setZapModalOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [zapConfirmed, setZapConfirmed] = useState(false);
   const zapSubRef = useRef<{ unsubscribe: () => void } | null>(null);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const didLongPress = useRef(false);
   const { showNotification } = useNotification();
   const { relays } = useRelays();
 
   const recipient = profiles?.get(pollEvent.pubkey);
+  const zapInfos = getZapInfos(pollEvent.id);
+  const totalSats = getTotalSats(pollEvent.id);
+  const hasZapped = zapInfos.some((z) => z.senderPubkey === user?.pubkey);
 
   useEffect(() => {
-    const fetchZaps = async () => {
-      if (!zapsMap?.get(pollEvent.id)) {
-        fetchZapsThrottled(pollEvent.id);
-      }
-      const fetchedZaps = zapsMap?.get(pollEvent.id) || [];
-      const userZapped = fetchedZaps.some(
-        (zap) => zap.tags.find((t) => t[0] === "P")?.[1] === user?.pubkey
-      );
-      setHasZapped(userZapped);
-    };
+    registerEventId(pollEvent.id);
+  }, [pollEvent.id, registerEventId]);
 
-    fetchZaps();
-  }, [pollEvent.id, zapsMap, fetchZapsThrottled, user]);
+  // ── Long press handlers ───────────────────────────────────────────────────
 
-  const getTotalZaps = () => {
-    let amount = 0;
-    zapsMap?.get(pollEvent.id)?.forEach((e) => {
-      const bolt11Tag = e.tags.find((t) => t[0] === "bolt11");
-      if (bolt11Tag && bolt11Tag[1]) {
-        try {
-          const sats = nip57.getSatoshisAmountFromBolt11(bolt11Tag[1]);
-          amount += sats || 0;
-        } catch (e) {
-          return;
-        }
-      }
-    });
-    return amount.toString();
+  const startLongPress = () => {
+    didLongPress.current = false;
+    longPressTimer.current = setTimeout(() => {
+      didLongPress.current = true;
+      setDetailsOpen(true);
+    }, LONG_PRESS_MS);
   };
 
-  const handleZapClick = () => {
+  const cancelLongPress = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  const handleClick = () => {
+    if (didLongPress.current) return; // long press already handled
     if (!user) {
       showNotification(NOTIFICATION_MESSAGES.LOGIN_TO_ZAP, "warning");
       return;
@@ -76,8 +77,10 @@ const Zap: React.FC<ZapProps> = ({ pollEvent }) => {
       showNotification(NOTIFICATION_MESSAGES.RECIPIENT_PROFILE_ERROR, "error");
       return;
     }
-    setModalOpen(true);
+    setZapModalOpen(true);
   };
+
+  // ── Zap payment flow ─────────────────────────────────────────────────────
 
   const handleZap = async (amount: number): Promise<string | null> => {
     if (!recipient) {
@@ -91,17 +94,16 @@ const Zap: React.FC<ZapProps> = ({ pollEvent }) => {
         event: pollEvent.id,
         amount: amount * 1000,
         comment: "",
-        relays: relays,
+        relays,
       });
       const signedZapRequest = await signEvent(zapRequestEvent, user!.privateKey);
       const serializedZapEvent = encodeURIComponent(JSON.stringify(signedZapRequest));
       const zapEndpoint = await nip57.getZapEndpoint(recipient.event);
-      const zaprequestUrl =
-        zapEndpoint + `?amount=${amount * 1000}&nostr=${serializedZapEvent}`;
-      const paymentRequest = await fetch(zaprequestUrl);
+      const zapRequestUrl = zapEndpoint + `?amount=${amount * 1000}&nostr=${serializedZapEvent}`;
+      const paymentRequest = await fetch(zapRequestUrl);
       const request = await paymentRequest.json();
 
-      // Subscribe for the zap receipt (kind 9735) so we can detect payment
+      // Subscribe for the zap receipt so we can detect confirmation
       const since = Math.floor(Date.now() / 1000);
       zapSubRef.current?.unsubscribe();
       const handle = nostrRuntime.subscribe(
@@ -110,6 +112,7 @@ const Zap: React.FC<ZapProps> = ({ pollEvent }) => {
         {
           onEvent: (event) => {
             addEventToMap(event);
+            addZapEvent(event);
             setZapConfirmed(true);
             zapSubRef.current?.unsubscribe();
             zapSubRef.current = null;
@@ -126,28 +129,36 @@ const Zap: React.FC<ZapProps> = ({ pollEvent }) => {
     }
   };
 
-  const recipientName =
-    recipient?.name || recipient?.display_name;
+  const recipientName = recipient?.name || recipient?.display_name;
+
+  const formatSats = (n: number): string => {
+    if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
+    if (n >= 1_000) return (n / 1_000).toFixed(1).replace(/\.0$/, "") + "k";
+    return n.toString();
+  };
 
   return (
     <Wrapper style={{ marginLeft: 20 }}>
-      <Tooltip onClick={handleZapClick} title="Send a Zap">
+      <Tooltip title={zapInfos.length > 0 ? "Tap to zap · Hold to see who zapped" : "Send a Zap"}>
         <span
-          style={{ cursor: "pointer", display: "flex", flexDirection: "row" }}
+          style={{ cursor: "pointer", display: "flex", flexDirection: "row", alignItems: "center" }}
+          onMouseDown={startLongPress}
+          onMouseUp={cancelLongPress}
+          onMouseLeave={cancelLongPress}
+          onTouchStart={startLongPress}
+          onTouchEnd={cancelLongPress}
+          onTouchCancel={cancelLongPress}
+          onClick={handleClick}
         >
           {hasZapped ? (
             <FlashOn
-              sx={(theme) => {
-                return {
-                  color: theme.palette.primary.main,
-                  "& path": {
-                    ...getColorsWithTheme(theme, {
-                      stroke: "#000000",
-                    }),
-                    strokeWidth: 2,
-                  },
-                };
-              }}
+              sx={(theme) => ({
+                color: theme.palette.primary.main,
+                "& path": {
+                  ...getColorsWithTheme(theme, { stroke: "#000000" }),
+                  strokeWidth: 2,
+                },
+              })}
             />
           ) : (
             <FlashOn
@@ -160,23 +171,30 @@ const Zap: React.FC<ZapProps> = ({ pollEvent }) => {
               })}
             />
           )}
-          {zapsMap?.get(pollEvent.id) ? (
-            <Typography>{getTotalZaps()}</Typography>
-          ) : null}
+          {totalSats > 0 && (
+            <Typography sx={{ ml: 0.25 }}>{formatSats(totalSats)}</Typography>
+          )}
         </span>
       </Tooltip>
 
       <ZapModal
-        open={modalOpen}
+        open={zapModalOpen}
         onClose={() => {
           zapSubRef.current?.unsubscribe();
           zapSubRef.current = null;
           setZapConfirmed(false);
-          setModalOpen(false);
+          setZapModalOpen(false);
         }}
         onZap={handleZap}
         recipientName={recipientName}
         zapConfirmed={zapConfirmed}
+      />
+
+      <ZapDetailsModal
+        open={detailsOpen}
+        onClose={() => setDetailsOpen(false)}
+        zapInfos={zapInfos}
+        totalSats={totalSats}
       />
     </Wrapper>
   );

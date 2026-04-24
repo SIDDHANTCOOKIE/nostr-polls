@@ -101,11 +101,14 @@ const ZapModal: React.FC<ZapModalProps> = ({
   const [copySuccess, setCopySuccess] = useState(false);
   useBackClose(open, onClose);
 
+  const onCloseRef = React.useRef(onClose);
+  React.useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+
   useEffect(() => {
     if (!zapConfirmed) return;
-    const timer = setTimeout(() => onClose(), 1500);
+    const timer = setTimeout(() => onCloseRef.current(), 1500);
     return () => clearTimeout(timer);
-  }, [zapConfirmed, onClose]);
+  }, [zapConfirmed]);
 
   const handleClose = () => {
     setSelectedAmount(100);

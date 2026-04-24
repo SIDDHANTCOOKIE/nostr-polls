@@ -36,6 +36,7 @@ import MailIcon from "@mui/icons-material/Mail";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { useNotification } from "../../contexts/notification-context";
 import { Nip05Badge } from "../Common/Nip05Badge";
+import { TextWithImages } from "../Common/Parsers/TextWithImages";
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -454,8 +455,8 @@ const ProfilePage: React.FC = () => {
           {profile?.about && (
             <>
               <Divider sx={{ my: 2 }} />
-              <Typography variant="body2" color="text.secondary">
-                {profile.about}
+              <Typography variant="body2" color="text.secondary" component="div">
+                <TextWithImages content={profile.about} />
               </Typography>
             </>
           )}

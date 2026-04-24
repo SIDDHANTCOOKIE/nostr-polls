@@ -24,6 +24,7 @@ import { AppContextProvider } from "./contexts/app-context";
 import { ListProvider } from "./contexts/lists-context";
 import { UserProvider } from "./contexts/user-context";
 import { RatingProvider } from "./contexts/RatingProvider";
+import { ZapProvider } from "./contexts/ZapProvider";
 import { MetadataProvider } from "./hooks/MetadataProvider";
 import { NotificationProvider } from "./contexts/notification-context";
 import { RelayProvider } from "./contexts/relay-context";
@@ -275,6 +276,7 @@ const App: React.FC = () => {
                 <NostrNotificationsProvider>
                   <TranslationBatchProvider>
                     <ListProvider>
+                      <ZapProvider>
                       <RatingProvider>
                         <Nip89Provider>
                         <ReportsProvider>
@@ -295,6 +297,7 @@ const App: React.FC = () => {
                         </ReportsProvider>
                         </Nip89Provider>
                       </RatingProvider>
+                      </ZapProvider>
                     </ListProvider>
                   </TranslationBatchProvider>
                 </NostrNotificationsProvider>

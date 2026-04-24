@@ -4,6 +4,7 @@ import { Avatar, Card, CardContent, Typography } from "@mui/material";
 import Rate from "../Ratings/Rate";
 import { DEFAULT_IMAGE_URL } from "../../utils/constants";
 import { Nip05Badge } from "../Common/Nip05Badge";
+import { TextWithImages } from "../Common/Parsers/TextWithImages";
 
 const ProfileCard: React.FC<{ event: Event }> = ({ event }) => {
   const profile = JSON.parse(event.content || "{}");
@@ -16,8 +17,8 @@ const ProfileCard: React.FC<{ event: Event }> = ({ event }) => {
         />
         <Typography variant="h6">{profile.name || "Unnamed"}</Typography>
         <Nip05Badge nip05={profile.nip05} pubkey={event.pubkey} />
-        <Typography variant="body2" color="text.secondary">
-          {profile.about}
+        <Typography variant="body2" color="text.secondary" component="div">
+          <TextWithImages content={profile.about} />
         </Typography>
         <Rate entityId={event.pubkey} entityType="profile" />
       </CardContent>

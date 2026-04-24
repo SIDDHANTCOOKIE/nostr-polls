@@ -7,21 +7,23 @@ import { useSubNav } from "../../../../contexts/SubNavContext";
 const FollowingFeed = lazy(() => import("./FollowingFeed"));
 const ReactedFeed = lazy(() => import("./ReactedFeed"));
 const DiscoverFeed = lazy(() => import("./DiscoverFeed"));
+const ZappedFeed = lazy(() => import("./ZappedFeed"));
 
 export type NoteMode = "notes" | "conversations";
+type NotesTab = "following" | "reacted" | "discover" | "zapped";
 
 const NotesFeed = () => {
   const NOTES_TAB_KEY = "pollerama:lastNotesTab";
-  const [activeTab, setActiveTab] = useState<"following" | "reacted" | "discover">(
+  const [activeTab, setActiveTab] = useState<NotesTab>(
     () => {
       const saved = localStorage.getItem(NOTES_TAB_KEY);
-      return (saved === "following" || saved === "reacted" || saved === "discover")
+      return (saved === "following" || saved === "reacted" || saved === "discover" || saved === "zapped")
         ? saved
         : "discover";
     }
   );
 
-  const handleSetActiveTab = (tab: "following" | "reacted" | "discover") => {
+  const handleSetActiveTab = (tab: NotesTab) => {
     setActiveTab(tab);
     localStorage.setItem(NOTES_TAB_KEY, tab);
   };
@@ -59,6 +61,12 @@ const NotesFeed = () => {
         active: activeTab === "reacted",
         onClick: () => handleSetActiveTab("reacted"),
       },
+      {
+        key: "zapped",
+        label: "Zapped",
+        active: activeTab === "zapped",
+        onClick: () => handleSetActiveTab("zapped"),
+      },
     ]);
     return () => clearItems();
   }, [activeTab, setItems, clearItems]);
@@ -73,6 +81,8 @@ const NotesFeed = () => {
             ? "Notes from people you follow"
             : activeTab === "reacted"
             ? "Notes reacted to by contacts"
+            : activeTab === "zapped"
+            ? "Notes zapped by your contacts"
             : "Discover new posts from friends of friends"}
         </Typography>
 
@@ -105,6 +115,8 @@ const NotesFeed = () => {
             />
           ) : activeTab === "reacted" ? (
             <ReactedFeed onRegisterRefresh={(fn) => { refreshRef.current = fn; }} />
+          ) : activeTab === "zapped" ? (
+            <ZappedFeed onRegisterRefresh={(fn) => { refreshRef.current = fn; }} />
           ) : (
             <DiscoverFeed
               noteMode={noteMode}
