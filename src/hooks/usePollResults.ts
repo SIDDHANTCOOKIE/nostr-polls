@@ -9,6 +9,8 @@ export interface OptionResult {
   count: number;
   percentage: number;
   responders: string[];
+  /** Maps responder pubkey → their vote event ID, for relay lookups */
+  responderEventIds: Map<string, string>;
 }
 
 /**
@@ -79,8 +81,8 @@ export function usePollResults(
   }, [responses, difficulty]);
 
   const results = useMemo(() => {
-    const counts = new Map<string, { count: number; responders: string[] }>();
-    for (const opt of options) counts.set(opt[1], { count: 0, responders: [] });
+    const counts = new Map<string, { count: number; responders: string[]; responderEventIds: Map<string, string> }>();
+    for (const opt of options) counts.set(opt[1], { count: 0, responders: [], responderEventIds: new Map() });
 
     for (const event of uniqueResponses) {
       for (const tag of event.tags) {
@@ -89,6 +91,7 @@ export function usePollResults(
           if (entry && !entry.responders.includes(event.pubkey)) {
             entry.count++;
             entry.responders.push(event.pubkey);
+            entry.responderEventIds.set(event.pubkey, event.id);
           }
         }
       }

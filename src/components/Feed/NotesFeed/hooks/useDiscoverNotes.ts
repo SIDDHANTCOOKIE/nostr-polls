@@ -91,8 +91,15 @@ export const useDiscoverNotes = () => {
             filter.since = now - 86400;
         }
 
+        const deletionFilter: Filter = { kinds: [5], authors: Array.from(webOfTrust) };
+        if (oldestTimestampRef.current !== null) {
+            deletionFilter.until = oldestTimestampRef.current;
+        } else {
+            deletionFilter.since = now - 86400;
+        }
+
         let hasNewEvents = false;
-        const handle = nostrRuntime.subscribe(relays, [filter], {
+        const handle = nostrRuntime.subscribe(relays, [filter, deletionFilter], {
             onEvent: (event: any) => {
                 hasNewEvents = true;
                 if (oldestTimestampRef.current === null || event.created_at < oldestTimestampRef.current) {

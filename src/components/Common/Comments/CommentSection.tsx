@@ -255,7 +255,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({
     profiles,
   } = useAppContext();
 
-  const isNip22 = !!addressableRef;
+  const isNip22 = !!addressableRef || rootKind != null;
 
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [showReplies, setShowReplies] = useState<Map<string, boolean>>(new Map());
@@ -268,9 +268,13 @@ const CommentSection: React.FC<CommentSectionProps> = ({
   const { relays, writeRelays } = useRelays();
 
   const fetchComments = () => {
-    // Always fetch kind 1 replies by event id, plus kind 1111 by addressable ref if present
     const filters: object[] = [{ kinds: [1], "#e": [eventId] }];
-    if (addressableRef) filters.push({ kinds: [1111], "#a": [addressableRef] });
+    if (addressableRef) {
+      filters.push({ kinds: [1111], "#a": [addressableRef] });
+    } else if (rootKind != null) {
+      filters.push({ kinds: [1111], "#E": [eventId] });
+      filters.push({ kinds: [1111], "#e": [eventId] });
+    }
     const handle = nostrRuntime.subscribe(relays, filters as any, {
       onEvent: addEventToMap,
     });
@@ -316,7 +320,9 @@ const CommentSection: React.FC<CommentSectionProps> = ({
       ? [
           ...mentionTags,
           ...pTags,
-          ["A", addressableRef!, "", "root"],
+          ...(addressableRef
+            ? [["A", addressableRef, "", "root"]]
+            : [["E", eventId, "", "root"]]),
           ...(rootKind != null ? [["K", String(rootKind)]] : []),
           ...(parentId ? [["e", parentId, "", "reply"], ["k", "1111"]] : []),
         ]

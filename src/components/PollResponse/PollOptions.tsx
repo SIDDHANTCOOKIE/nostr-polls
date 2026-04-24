@@ -5,18 +5,7 @@ import { TextWithImages } from "../Common/Parsers/TextWithImages";
 import { OptionResult } from "../../hooks/usePollResults";
 import { useAppContext } from "../../hooks/useAppContext";
 import { DEFAULT_IMAGE_URL } from "../../utils/constants";
-
-// Evenly-spaced hues for per-option bar colours
-const BAR_COLORS = [
-  "#3b82f6", // blue
-  "#22c55e", // green
-  "#f59e0b", // amber
-  "#a855f7", // purple
-  "#ef4444", // red
-  "#14b8a6", // teal
-  "#f97316", // orange
-  "#ec4899", // pink
-];
+import { BAR_COLORS } from "./barColors";
 
 interface PollOptionsProps {
   options: [string, string, string][];
@@ -27,6 +16,7 @@ interface PollOptionsProps {
   showResults: boolean;
   results: Map<string, OptionResult>;
   tags?: string[][];
+  onVotersClick?: (optionId: string) => void;
 }
 
 const PollOptions: React.FC<PollOptionsProps> = ({
@@ -38,6 +28,7 @@ const PollOptions: React.FC<PollOptionsProps> = ({
   showResults,
   results,
   tags,
+  onVotersClick,
 }) => {
   const theme = useTheme();
   const { profiles } = useAppContext();
@@ -126,7 +117,10 @@ const PollOptions: React.FC<PollOptionsProps> = ({
               {showResults && (
                 <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, ml: 1, flexShrink: 0 }}>
                   {responders.length > 0 && (
-                    <Box sx={{ display: "flex", alignItems: "center", opacity: 0.55 }}>
+                    <Box
+                      sx={{ display: "flex", alignItems: "center", opacity: 0.65, cursor: onVotersClick ? "pointer" : "default" }}
+                      onClick={onVotersClick ? (e) => { e.stopPropagation(); onVotersClick(optionId); } : undefined}
+                    >
                       {responders.slice(0, 4).map((pubkey, i) => (
                         <Avatar
                           key={pubkey}

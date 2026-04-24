@@ -1,4 +1,6 @@
 import { EventTemplate } from "nostr-tools";
+import { sha256 } from "@noble/hashes/sha256";
+import { bytesToHex } from "@noble/hashes/utils";
 
 export const DEFAULT_BLOSSOM_SERVER = "https://blossom.primal.net";
 export const BLOSSOM_SERVER_KEY = "pollerama:blossom-server";
@@ -9,10 +11,13 @@ export function getBlossomServer(): string {
 
 async function sha256Hex(file: File): Promise<string> {
   const buffer = await file.arrayBuffer();
-  const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
-  return Array.from(new Uint8Array(hashBuffer))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  if (crypto?.subtle) {
+    const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+    return Array.from(new Uint8Array(hashBuffer))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+  }
+  return bytesToHex(sha256(new Uint8Array(buffer)));
 }
 
 /**

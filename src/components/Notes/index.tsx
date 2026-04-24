@@ -38,6 +38,7 @@ import MoreVertIcon from "@mui/icons-material/MoreVert";
 import SummarizeIcon from "@mui/icons-material/Summarize";
 import CellTowerIcon from "@mui/icons-material/CellTower";
 import { waitForPublish } from "../../utils/publish";
+import { publishDeletion } from "../../utils/deletion";
 import { usePublishDiagnostic } from "../../hooks/usePublishDiagnostic";
 import RateEventModal from "../../components/Ratings/RateEventModal";
 import { useUserContext } from "../../hooks/useUserContext";
@@ -54,6 +55,7 @@ import FlagIcon from "@mui/icons-material/Flag";
 import OverlappingAvatars from "../Common/OverlappingAvatars";
 import { Nip05Badge } from "../Common/Nip05Badge";
 import { RelaySourceModal } from "../Common/RelaySourceModal";
+import { ClientChip } from "../Common/ClientChip";
 import { PublishDiagnosticModal } from "../Common/PublishDiagnosticModal";
 import { useEventRelays } from "../../hooks/useEventRelays";
 
@@ -101,6 +103,8 @@ export const Notes: React.FC<NotesProps> = ({
   const [reportPostDialogOpen, setReportPostDialogOpen] = useState(false);
   const [reportUserDialogOpen, setReportUserDialogOpen] = useState(false);
   const [showReportedAnyway, setShowReportedAnyway] = useState(false);
+
+  const [deleted, setDeleted] = useState(false);
 
   // Edit state
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -311,6 +315,17 @@ export const Notes: React.FC<NotesProps> = ({
     }
   };
 
+  const handleDelete = async () => {
+    handleCloseMenu();
+    try {
+      const { event: deletionEvent, result } = await publishDeletion([event.id], [event.kind], writeRelays);
+      setDeleted(true);
+      openDiagnostic(deletionEvent, result, "Delete relay results");
+    } catch {
+      showNotification("Failed to delete note", "error");
+    }
+  };
+
   const handleReportPost = async (reason: ReportReason, content: string) => {
     await reportEvent(event.id, event.pubkey, reason, content);
     showNotification("Post reported", "success");
@@ -368,6 +383,9 @@ export const Notes: React.FC<NotesProps> = ({
   useResizeObserver(contentRef, checkOverflow);
 
   const timeAgo = calculateTimeAgo(event.created_at);
+
+  if (deleted && !diagnosticOpen) return null;
+
   return (
     <>
       {hiddenByReport ? (
@@ -563,6 +581,11 @@ export const Notes: React.FC<NotesProps> = ({
                 Edit
               </MenuItem>
             )}
+            {user && user.pubkey === event.pubkey && (
+              <MenuItem onClick={handleDelete} sx={{ color: "error.main", gap: 1 }}>
+                Delete note
+              </MenuItem>
+            )}
             {user && (
               <MenuItem
                 onClick={() => {
@@ -654,6 +677,8 @@ export const Notes: React.FC<NotesProps> = ({
                   <PrepareNote neventId={replyingToNevent} />
                 </div>
               ) : null}
+
+              <ClientChip tags={event.tags} />
 
               {!isExpanded && isOverflowing && (
                 <div

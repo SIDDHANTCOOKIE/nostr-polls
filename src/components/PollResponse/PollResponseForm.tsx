@@ -45,7 +45,8 @@ import PollTimer from "./PollTimer";
 import { FeedbackMenu } from "../FeedbackMenu";
 import { useNotification } from "../../contexts/notification-context";
 import { NOTIFICATION_MESSAGES } from "../../constants/notifications";
-import { pool } from "../../singletons";
+import { pool, nostrRuntime } from "../../singletons";
+import { getEventRelays } from "../../nostrRuntime/EventRelayMap";
 import { useReports } from "../../hooks/useReports";
 import { ReportDialog } from "../Report/ReportDialog";
 import { ReportReason } from "../../contexts/reports-context";
@@ -55,9 +56,12 @@ import { Nip05Badge } from "../Common/Nip05Badge";
 import { RelaySourceModal } from "../Common/RelaySourceModal";
 import { PublishDiagnosticModal } from "../Common/PublishDiagnosticModal";
 import { useEventRelays } from "../../hooks/useEventRelays";
+import { ClientChip } from "../Common/ClientChip";
+import { publishDeletion } from "../../utils/deletion";
 import { PublishResult } from "../../utils/publish";
 import { usePublishDiagnostic } from "../../hooks/usePublishDiagnostic";
 import PollOptions from "./PollOptions";
+import VotersModal from "./VotersModal";
 import { usePollResults } from "../../hooks/usePollResults";
 import { useBackClose } from "../../hooks/useBackClose";
 
@@ -100,6 +104,9 @@ const PollResponseForm: React.FC<PollResponseFormProps> = ({
   const [reportPollDialogOpen, setReportPollDialogOpen] = useState(false);
   const [reportAuthorDialogOpen, setReportAuthorDialogOpen] = useState(false);
   const [showReportedAnyway, setShowReportedAnyway] = useState(false);
+  const [deleted, setDeleted] = useState(false);
+  const [votersModalOpen, setVotersModalOpen] = useState(false);
+  const [votersFocusOption, setVotersFocusOption] = useState<string | null>(null);
 
   const navigate = useNavigate();
   const { showNotification } = useNotification();
@@ -127,11 +134,11 @@ const PollResponseForm: React.FC<PollResponseFormProps> = ({
     pollEvent.tags.find((t) => t[0] === "label")?.[1] || pollEvent.content;
 
   // Fetch results lazily — only when the user wants to see them (or after voting)
-  const { results } = usePollResults(
+  const { results, totalVotes } = usePollResults(
     pollEvent,
     difficulty,
     filterPubkeys,
-    showResults
+    showResults || votersModalOpen
   );
 
   // Check whether the content area overflows its maxHeight cap
@@ -169,6 +176,52 @@ const PollResponseForm: React.FC<PollResponseFormProps> = ({
       openDiagnostic(pollEvent, res, "Broadcast relay results");
     } finally {
       setIsBroadcasting(false);
+    }
+  };
+
+  const handleDeletePoll = async () => {
+    setIsDetailsOpen(false);
+    setAnchorEl(null);
+    try {
+      const { event: deletionEvent, result } = await publishDeletion([pollEvent.id], [pollEvent.kind], writeRelays);
+      setDeleted(true);
+      openDiagnostic(deletionEvent, result, "Delete relay results");
+    } catch {
+      showNotification("Failed to delete poll", "error");
+    }
+  };
+
+  const handleClearVotes = async () => {
+    setIsDetailsOpen(false);
+    setAnchorEl(null);
+    if (!user) return;
+    try {
+      const pollRelays = pollEvent.tags.filter((t) => t[0] === "relay").map((t) => t[1]);
+      const fetchRelays = Array.from(new Set([...pollRelays, ...relays]));
+      const userResponses = await nostrRuntime.querySync(fetchRelays, {
+        kinds: [1018, 1070],
+        authors: [user.pubkey],
+        "#e": [pollEvent.id],
+      } as any);
+      if (userResponses.length === 0) {
+        showNotification("No votes found on relays", "info");
+        return;
+      }
+      const ids = userResponses.map((e) => e.id);
+      const kinds = Array.from(new Set(userResponses.map((e) => e.kind)));
+      // Send deletion to every relay that has any of these votes
+      const allDeletionRelays = Array.from(new Set([
+        ...writeRelays,
+        ...pollRelays,
+        ...ids.flatMap((id) => getEventRelays(id)),
+      ]));
+      const { event: deletionEvent, result } = await publishDeletion(ids, kinds, allDeletionRelays);
+      setHasSubmitted(false);
+      setResponses([]);
+      setShowResults(false);
+      openDiagnostic(deletionEvent, result, "Clear votes relay results");
+    } catch {
+      showNotification("Failed to clear votes", "error");
     }
   };
 
@@ -340,6 +393,8 @@ const PollResponseForm: React.FC<PollResponseFormProps> = ({
     showNotification("User reported", "success");
   };
 
+  if (deleted && !diagnosticOpen) return null;
+
   if (hiddenByReport) {
     return (
       <div>
@@ -466,6 +521,19 @@ const PollResponseForm: React.FC<PollResponseFormProps> = ({
               <MenuItem onClick={copyPollUrl}>Copy URL</MenuItem>
               <MenuItem onClick={handleCopyNpub}>Copy Author npub</MenuItem>
               <MenuItem onClick={copyRawEvent}>Copy Raw Event</MenuItem>
+              <MenuItem onClick={() => { setVotersFocusOption(null); setVotersModalOpen(true); setIsDetailsOpen(false); setAnchorEl(null); }}>
+                See voters
+              </MenuItem>
+              {user && (
+                <MenuItem onClick={handleClearVotes} sx={{ color: "warning.main" }}>
+                  Clear my votes
+                </MenuItem>
+              )}
+              {user && user.pubkey === pollEvent.pubkey && (
+                <MenuItem onClick={handleDeletePoll} sx={{ color: "error.main" }}>
+                  Delete poll
+                </MenuItem>
+              )}
               {user && (
                 <MenuItem
                   onClick={() => {
@@ -529,9 +597,12 @@ const PollResponseForm: React.FC<PollResponseFormProps> = ({
                   showResults={showResults}
                   results={results}
                   tags={pollEvent.tags}
+                  onVotersClick={(optionId) => { setVotersFocusOption(optionId); setVotersModalOpen(true); }}
                 />
 
                 {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
+
+                <ClientChip tags={pollEvent.tags} />
 
                 {/* See more overlay */}
                 {!isExpanded && isOverflowing && (
@@ -591,7 +662,7 @@ const PollResponseForm: React.FC<PollResponseFormProps> = ({
             </CardActions>
           </Card>
         </form>
-        <FeedbackMenu event={pollEvent} />
+        <FeedbackMenu event={pollEvent} rootKind={pollEvent.kind} />
         {diagnosticResult && (
           <PublishDiagnosticModal
             open={diagnosticOpen}
@@ -650,6 +721,14 @@ const PollResponseForm: React.FC<PollResponseFormProps> = ({
         onClose={() => setReportAuthorDialogOpen(false)}
         onSubmit={handleReportAuthor}
         title="Report author"
+      />
+      <VotersModal
+        open={votersModalOpen}
+        onClose={() => setVotersModalOpen(false)}
+        options={options}
+        results={results}
+        totalVotes={totalVotes}
+        focusOptionId={votersFocusOption}
       />
     </div>
   );

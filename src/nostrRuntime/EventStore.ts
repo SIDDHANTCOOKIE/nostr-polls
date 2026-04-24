@@ -36,6 +36,10 @@ export class EventStore {
   // Replaceable event tracking
   private replaceableKeys: Map<string, string> = new Map(); // key -> event ID
 
+  // Deletion tracking (NIP-09)
+  private deletedIds: Map<string, string> = new Map(); // target_event_id -> deleter_pubkey
+  private processedDeletionEventIds: Set<string> = new Set();
+
   // Reactive subscriptions
   private listeners: Map<string, Set<EventCallback>> = new Map();
   private listenerIdCounter = 0;
@@ -50,6 +54,27 @@ export class EventStore {
       console.warn('Invalid event structure:', event);
       return false;
     }
+
+    // Handle deletion events (NIP-09) — process but don't store
+    if (event.kind === 5) {
+      if (this.processedDeletionEventIds.has(event.id)) return false;
+      this.processedDeletionEventIds.add(event.id);
+      for (const tag of event.tags) {
+        if (tag[0] === 'e' && tag[1]) {
+          this.deletedIds.set(tag[1], event.pubkey);
+          const target = this.eventsById.get(tag[1]);
+          if (target && target.pubkey === event.pubkey) {
+            this.removeEvent(tag[1]);
+          }
+        }
+      }
+      this.notifyListeners(event);
+      return true;
+    }
+
+    // Reject events that have already been deleted by their own author
+    const deleterPubkey = this.deletedIds.get(event.id);
+    if (deleterPubkey && deleterPubkey === event.pubkey) return false;
 
     // Don't store ephemeral events
     if (isEphemeralEvent(event.kind)) {
@@ -204,7 +229,10 @@ export class EventStore {
     for (const eventId of Array.from(candidateIds)) {
       const event = this.eventsById.get(eventId);
       if (event && eventMatchesFilter(event, filter)) {
-        matchingEvents.push(event);
+        const deleter = this.deletedIds.get(eventId);
+        if (!deleter || deleter !== event.pubkey) {
+          matchingEvents.push(event);
+        }
       }
     }
 
@@ -223,7 +251,15 @@ export class EventStore {
    * Get a single event by ID
    */
   getById(id: string): Event | undefined {
-    return this.eventsById.get(id);
+    const event = this.eventsById.get(id);
+    if (!event) return undefined;
+    const deleter = this.deletedIds.get(id);
+    if (deleter && deleter === event.pubkey) return undefined;
+    return event;
+  }
+
+  isDeleted(id: string): boolean {
+    return this.deletedIds.has(id);
   }
 
   /**
@@ -294,6 +330,8 @@ export class EventStore {
     this.eventsByAuthor.clear();
     this.eventsByTag.clear();
     this.replaceableKeys.clear();
+    this.deletedIds.clear();
+    this.processedDeletionEventIds.clear();
   }
 
   /**

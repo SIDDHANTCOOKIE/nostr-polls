@@ -131,8 +131,15 @@ export const useFollowingNotes = () => {
       repostFilter.until = oldestEventTimestampRef.current;
     }
 
+    const deletionFilter: Filter = { kinds: [5], authors };
+    if (fresh || oldestEventTimestampRef.current === null) {
+      deletionFilter.since = now - 86400;
+    } else {
+      deletionFilter.until = oldestEventTimestampRef.current;
+    }
+
     let hasNewEvents = false;
-    const handle = nostrRuntime.subscribe(gossipRelays, [noteFilter, repostFilter], {
+    const handle = nostrRuntime.subscribe(gossipRelays, [noteFilter, repostFilter, deletionFilter], {
       onEvent: (event: Event) => {
         if (event.kind === 6) {
           const originalNoteId = event.tags.find((t) => t[0] === "e")?.[1];

@@ -105,11 +105,12 @@ export const fetchComments = async (
   _pool: SimplePool,
   relays: string[] = defaultRelays
 ) => {
-  let result = await nostrRuntime.querySync(relays, {
-    kinds: [1],
-    "#e": eventIds,
-  });
-  return result;
+  const [kind1, kind1111e, kind1111E] = await Promise.all([
+    nostrRuntime.querySync(relays, { kinds: [1], "#e": eventIds }),
+    nostrRuntime.querySync(relays, { kinds: [1111], "#e": eventIds } as any),
+    nostrRuntime.querySync(relays, { kinds: [1111], "#E": eventIds } as any),
+  ]);
+  return [...kind1, ...kind1111e, ...kind1111E];
 };
 
 export const fetchLikes = async (

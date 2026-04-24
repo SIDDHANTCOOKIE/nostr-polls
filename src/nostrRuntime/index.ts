@@ -175,6 +175,13 @@ export class NostrRuntime {
   }
 
   /**
+   * Check whether an event ID has been marked as deleted (NIP-09)
+   */
+  isDeleted(id: string): boolean {
+    return this.eventStore.isDeleted(id);
+  }
+
+  /**
    * Add an event directly to the store
    * Useful for events received outside the subscription system
    * (e.g., from Throttler, user actions, etc.)
