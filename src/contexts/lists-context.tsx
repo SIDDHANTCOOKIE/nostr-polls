@@ -1,4 +1,4 @@
-import { ReactNode, createContext, useEffect, useState } from "react";
+import { ReactNode, createContext, useEffect, useRef, useState } from "react";
 import { Event, EventTemplate, Filter } from "nostr-tools";
 import { parseContacts, getATagFromEvent } from "../nostr";
 import { useRelays } from "../hooks/useRelays";
@@ -41,6 +41,21 @@ export function ListProvider({ children }: { children: ReactNode }) {
   const { relays } = useRelays();
   const { profiles, fetchUserProfileThrottled } = useAppContext();
   const [isFetchingWoT, setIsFetchingWoT] = useState(false);
+  const prevPubkeyRef = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    const prev = prevPubkeyRef.current;
+    const next = user?.pubkey;
+    if (prev !== undefined && prev !== next) {
+      setLists(undefined);
+      setMyTopics(undefined);
+      setMyTopicsEvent(undefined);
+      setBookmarkedPackKeys(new Set());
+      setBookmarks10003(null);
+      setIsFetchingWoT(false);
+    }
+    prevPubkeyRef.current = next;
+  }, [user?.pubkey]);
 
   const fetchLatestContactList = (): Promise<Event | null> => {
     if (!user) {
@@ -89,6 +104,7 @@ export function ListProvider({ children }: { children: ReactNode }) {
   };
 
   const handleContactListEvent = async (event: Event) => {
+    if (event.pubkey !== user?.pubkey) return;
     const follows = await parseContacts(event);
     let a_tag = `${event.kind}:${event.pubkey}`;
 

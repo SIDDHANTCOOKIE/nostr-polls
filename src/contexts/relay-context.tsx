@@ -24,6 +24,20 @@ export function RelayProvider({ children }: { children: ReactNode }) {
   const [isUsingUserRelays, setIsUsingUserRelays] = useState<boolean>(false);
   const { user } = useUserContext();
 
+  // Track which pubkey the current relay state belongs to. When the active
+  // account changes, reset to defaultRelays synchronously during render so
+  // that child feed components never mount with the previous user's stale
+  // relay set. Calling setState during render causes React to discard the
+  // in-progress render and immediately retry with the new state — children
+  // only ever see defaultRelays as the starting point for the new account.
+  const [relaysForPubkey, setRelaysForPubkey] = useState<string | undefined>(user?.pubkey);
+  if (relaysForPubkey !== user?.pubkey) {
+    setRelaysForPubkey(user?.pubkey);
+    setRelays(defaultRelays);
+    setWriteRelays(defaultRelays);
+    setIsUsingUserRelays(false);
+  }
+
   const fetchUserRelays = useCallback(async () => {
     // Reset to default relays when user logs out
     if (!user) {

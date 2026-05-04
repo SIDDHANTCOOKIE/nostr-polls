@@ -9,13 +9,15 @@ import UnifiedFeed from "../Feed/UnifiedFeed";
 
 interface UserArticlesFeedProps {
   pubkey: string;
+  relays?: string[];
   scrollContainerRef?: React.RefObject<HTMLDivElement>;
 }
 
-const UserArticlesFeed: React.FC<UserArticlesFeedProps> = ({ pubkey, scrollContainerRef }) => {
+const UserArticlesFeed: React.FC<UserArticlesFeedProps> = ({ pubkey, relays: propRelays, scrollContainerRef }) => {
   const [articles, setArticles] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
-  const { relays } = useRelays();
+  const { relays: hookRelays } = useRelays();
+  const relays = propRelays ?? hookRelays;
   const { fetchUserProfileThrottled, profiles } = useAppContext();
 
   const fetchArticles = useCallback(() => {

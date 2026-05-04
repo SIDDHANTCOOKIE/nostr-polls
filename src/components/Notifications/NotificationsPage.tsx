@@ -36,6 +36,7 @@ const NotificationsPage: React.FC = () => {
   const [postSnippets, setPostSnippets] = useState<Map<string, string>>(new Map());
   const [rawJsonEvent, setRawJsonEvent] = useState<Event | null>(null);
   const fetchingRef = useRef<Set<string>>(new Set());
+  const fetchedRef = useRef<Set<string>>(new Set());
 
   // Catch up on missed events and mark all as read when the page mounts
   useEffect(() => {
@@ -45,17 +46,18 @@ const NotificationsPage: React.FC = () => {
 
   const resolvePostContent = useCallback(
     (postId: string, relayHint?: string) => {
-      if (postSnippets.has(postId) || fetchingRef.current.has(postId)) return;
+      if (fetchedRef.current.has(postId) || fetchingRef.current.has(postId)) return;
       fetchingRef.current.add(postId);
 
       const cached = nostrRuntime.get(postId);
       if (cached) {
+        fetchedRef.current.add(postId);
+        fetchingRef.current.delete(postId);
         setPostSnippets((prev) => {
           const next = new Map(prev);
           next.set(postId, cached.content?.slice(0, 80) || "");
           return next;
         });
-        fetchingRef.current.delete(postId);
         return;
       }
 
@@ -63,6 +65,8 @@ const NotificationsPage: React.FC = () => {
         ? Array.from(new Set([...relays, relayHint]))
         : relays;
       nostrRuntime.fetchBatched(fetchRelays, postId).then((event) => {
+        fetchedRef.current.add(postId);
+        fetchingRef.current.delete(postId);
         if (event) {
           setPostSnippets((prev) => {
             const next = new Map(prev);
@@ -70,10 +74,9 @@ const NotificationsPage: React.FC = () => {
             return next;
           });
         }
-        fetchingRef.current.delete(postId);
       });
     },
-    [relays, postSnippets]
+    [relays]
   );
 
   useEffect(() => {

@@ -8,15 +8,17 @@ import UnifiedFeed from "../Feed/UnifiedFeed";
 
 interface UserPollsFeedProps {
   pubkey: string;
+  relays?: string[];
   scrollContainerRef?: React.RefObject<HTMLDivElement>;
 }
 
 const KIND_POLL = 1068;
 
-const UserPollsFeed: React.FC<UserPollsFeedProps> = ({ pubkey, scrollContainerRef }) => {
+const UserPollsFeed: React.FC<UserPollsFeedProps> = ({ pubkey, relays: propRelays, scrollContainerRef }) => {
   const [polls, setPolls] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
-  const { relays } = useRelays();
+  const { relays: hookRelays } = useRelays();
+  const relays = propRelays ?? hookRelays;
 
   const fetchPolls = useCallback(() => {
     if (!pubkey) return;

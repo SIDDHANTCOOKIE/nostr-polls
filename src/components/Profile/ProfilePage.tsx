@@ -22,6 +22,7 @@ import {
 import { Event, EventTemplate, nip19 } from "nostr-tools";
 import { useRelays } from "../../hooks/useRelays";
 import { fetchUserProfile, signEvent } from "../../nostr";
+import { getOutboxRelays } from "../../nostr/OutboxService";
 import { DEFAULT_IMAGE_URL } from "../../utils/constants";
 import Rate from "../Ratings/Rate";
 import UserPollsFeed from "./UserPollsFeed";
@@ -86,9 +87,24 @@ const ProfilePage: React.FC = () => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
+  const [profileRelays, setProfileRelays] = useState<string[]>(relays);
+
   const followersHandleRef = useRef<{ unsubscribe: () => void } | null>(null);
   const relaysRef = useRef(relays);
   useEffect(() => { relaysRef.current = relays; }, [relays]);
+
+  // Resolve profile person's outbox relays and merge with user's own relays.
+  useEffect(() => {
+    if (!pubkey) return;
+    setProfileRelays(relays);
+    getOutboxRelays(pubkey).then((outbox) => {
+      if (outbox.length > 0) {
+        setProfileRelays(Array.from(new Set([...relaysRef.current, ...outbox])));
+      }
+    });
+  // Only re-run when pubkey changes; relays are read via relaysRef to avoid churn.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pubkey]);
 
   // Auto-subscribe to following count + follows-you check (lightweight: single contact list).
   useEffect(() => {
@@ -100,7 +116,7 @@ const ProfilePage: React.FC = () => {
     let latestFollowingEvent: Event | null = null;
 
     const followingHandle = nostrRuntime.subscribe(
-      relays,
+      profileRelays,
       [
         {
           kinds: [3],
@@ -128,7 +144,7 @@ const ProfilePage: React.FC = () => {
     return () => {
       followingHandle.unsubscribe();
     };
-  }, [pubkey, relays, user]);
+  }, [pubkey, profileRelays, user]);
 
   // Reset followers state when pubkey changes, clean up any active subscription.
   useEffect(() => {
@@ -141,7 +157,7 @@ const ProfilePage: React.FC = () => {
       followersHandleRef.current?.unsubscribe();
       followersHandleRef.current = null;
     };
-  }, [pubkey, relays]);
+  }, [pubkey, profileRelays]);
 
   // Manually trigger followers subscription — streams counts as events arrive,
   // only cleaned up on unmount or pubkey change (pool EOSE fires early).
@@ -152,7 +168,7 @@ const ProfilePage: React.FC = () => {
     setFollowerCount(0);
 
     followersHandleRef.current = nostrRuntime.subscribe(
-      relays,
+      profileRelays,
       [
         {
           kinds: [3],
@@ -167,7 +183,7 @@ const ProfilePage: React.FC = () => {
         },
       },
     );
-  }, [pubkey, relays]);
+  }, [pubkey, profileRelays]);
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -518,24 +534,28 @@ const ProfilePage: React.FC = () => {
       <TabPanel value={tabValue} index={0}>
         <UserPollsFeed
           pubkey={pubkey}
+          relays={profileRelays}
           scrollContainerRef={scrollContainerRef}
         />
       </TabPanel>
       <TabPanel value={tabValue} index={1}>
         <UserNotesFeed
           pubkey={pubkey}
+          relays={profileRelays}
           scrollContainerRef={scrollContainerRef}
         />
       </TabPanel>
       <TabPanel value={tabValue} index={2}>
         <UserArticlesFeed
           pubkey={pubkey}
+          relays={profileRelays}
           scrollContainerRef={scrollContainerRef}
         />
       </TabPanel>
       <TabPanel value={tabValue} index={3}>
         <UserRatingsGiven
           pubkey={pubkey}
+          relays={profileRelays}
           scrollContainerRef={scrollContainerRef}
         />
       </TabPanel>

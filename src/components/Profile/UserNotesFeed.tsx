@@ -8,15 +8,17 @@ import UnifiedFeed from "../Feed/UnifiedFeed";
 
 interface UserNotesFeedProps {
   pubkey: string;
+  relays?: string[];
   scrollContainerRef?: React.RefObject<HTMLDivElement>;
 }
 
 const KIND_NOTE = 1;
 
-const UserNotesFeed: React.FC<UserNotesFeedProps> = ({ pubkey, scrollContainerRef }) => {
+const UserNotesFeed: React.FC<UserNotesFeedProps> = ({ pubkey, relays: propRelays, scrollContainerRef }) => {
   const [notes, setNotes] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
-  const { relays } = useRelays();
+  const { relays: hookRelays } = useRelays();
+  const relays = propRelays ?? hookRelays;
 
   const fetchNotes = useCallback(() => {
     if (!pubkey) return;

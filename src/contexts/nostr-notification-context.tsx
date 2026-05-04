@@ -50,6 +50,23 @@ export function NostrNotificationsProvider({
   // Track the highest created_at we've seen so refresh knows where to start from
   const latestNotifTsRef = useRef<number>(0);
 
+  // Reset notification state only when the active user changes (not on relay changes).
+  // The subscription cleanup must NOT clear notifications — relay updates trigger cleanup
+  // and re-subscription, and clearing there causes the visible flash/blank screen.
+  const prevNotifPubkeyRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const prev = prevNotifPubkeyRef.current;
+    const next = user?.pubkey;
+    if (prev !== undefined && prev !== next) {
+      setNotifications(new Map());
+      setUnreadCount(0);
+      pollMap.current.clear();
+      latestNotifTsRef.current = 0;
+      lastSeenRef.current = null;
+    }
+    prevNotifPubkeyRef.current = next;
+  }, [user?.pubkey]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const pollMap = useRef<Map<string, Event>>(new Map());
 
   //
@@ -173,7 +190,6 @@ export function NostrNotificationsProvider({
 
     hasStarted.current = true;
     let isCancelled = false;
-    const polls = pollMap.current;
 
     (async () => {
       // 1. load last seen — update ref first so pushNotification sees it immediately
@@ -204,11 +220,9 @@ export function NostrNotificationsProvider({
       subHandleRef.current?.unsubscribe();
       subHandleRef.current = null;
       hasStarted.current = false;
-      setNotifications(new Map());
-      setUnreadCount(0);
-      polls.clear();
-      latestNotifTsRef.current = 0;
-      lastSeenRef.current = null;
+      // State (notifications, counts, pollMap) is intentionally NOT cleared here.
+      // Relay changes trigger this cleanup and re-subscribe — clearing here causes
+      // the visible flash. The user-change effect above handles clearing on logout/switch.
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, relays, fetchPollIds]); // pushNotification intentionally omitted — stable useCallback with no deps

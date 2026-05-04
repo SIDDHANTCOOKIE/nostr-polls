@@ -126,6 +126,7 @@ function AppContent() {
     // undefined = first render (skip); null→pubkey or pubkey→pubkey = actual switch
     if (prev !== undefined && prev !== next) {
       resetStore();
+      nostrRuntime.reconnect();
     }
     prevPubkeyRef.current = next;
   }, [user?.pubkey, resetStore]);

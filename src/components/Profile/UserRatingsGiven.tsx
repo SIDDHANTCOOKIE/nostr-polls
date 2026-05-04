@@ -8,15 +8,17 @@ import UnifiedFeed from "../Feed/UnifiedFeed";
 
 interface UserRatingsGivenProps {
   pubkey: string;
+  relays?: string[];
   scrollContainerRef?: React.RefObject<HTMLDivElement>;
 }
 
 const KIND_RATING = 34259;
 
-const UserRatingsGiven: React.FC<UserRatingsGivenProps> = ({ pubkey, scrollContainerRef }) => {
+const UserRatingsGiven: React.FC<UserRatingsGivenProps> = ({ pubkey, relays: propRelays, scrollContainerRef }) => {
   const [ratings, setRatings] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
-  const { relays } = useRelays();
+  const { relays: hookRelays } = useRelays();
+  const relays = propRelays ?? hookRelays;
 
   const fetchRatings = useCallback(() => {
     if (!pubkey) return;
