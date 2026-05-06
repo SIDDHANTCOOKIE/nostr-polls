@@ -34,6 +34,7 @@ const MOBILE_SUB_ITEMS: Record<string, { key: string; label: string }[]> = {
     { key: "discover", label: "Discover" },
     { key: "following", label: "Following" },
     { key: "reacted", label: "Reacted" },
+    { key: "zapped", label: "Zapped" },
   ],
   topics: [
     { key: "interests", label: "My Interests" },

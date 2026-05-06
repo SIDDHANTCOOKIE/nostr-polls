@@ -5,6 +5,7 @@ import { useUserContext } from "../../hooks/useUserContext";
 import { useRelays } from "../../hooks/useRelays";
 import { useReports } from "../../hooks/useReports";
 import { Box, Typography } from "@mui/material";
+import FeedError from "./FeedError";
 import { nostrRuntime } from "../../singletons";
 import { SubscriptionHandle } from "../../nostrRuntime/types";
 import UnifiedFeed from "./UnifiedFeed";
@@ -18,6 +19,7 @@ import { useFeedActions } from "../../contexts/FeedActionsContext";
 const KIND_POLL = 1068;
 const KIND_RESPONSE = [1018, 1070];
 const KIND_REPOST = 16;
+const FETCH_TIMEOUT_MS = 8000;
 
 // Stable empty array — avoids creating a new reference on every render for
 // polls that have no reposts, which would defeat React.memo on PollFeedItem.
@@ -83,6 +85,7 @@ export const PollFeed = () => {
   >();
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadingInitial, setLoadingInitial] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [pendingPollEvents, setPendingPollEvents] = useState<Event[]>([]);
   // Ref so handleIncomingEvent can read the current value without a stale closure
@@ -246,14 +249,32 @@ export const PollFeed = () => {
       gossipRelays = getRelaysForAuthors(relays, authors);
     }
 
-    const closer = subscribeWithAuthors([filterPolls, filterResposts], () => {
-      if (fresh) {
+    let eoseFired = false;
+    let timeoutId: ReturnType<typeof setTimeout>;
+
+    const onComplete = (failed = false) => {
+      if (eoseFired) return;
+      eoseFired = true;
+      clearTimeout(timeoutId);
+      if (failed) {
+        setLoadFailed(true);
+        setLoadingInitial(false);
+        setRefreshing(false);
+        loadingInitialRef.current = false;
+      } else if (fresh) {
         setRefreshing(false);
         loadingInitialRef.current = false;
       } else {
         setLoadingInitial(false);
       }
-    }, gossipRelays, fresh);
+    };
+
+    const closer = subscribeWithAuthors([filterPolls, filterResposts], () => onComplete(), gossipRelays, fresh);
+
+    timeoutId = setTimeout(() => {
+      closer.unsubscribe();
+      onComplete(true);
+    }, FETCH_TIMEOUT_MS);
 
     return closer;
   }, [eventSource, user, relays, subscribeWithAuthors]);
@@ -262,6 +283,7 @@ export const PollFeed = () => {
     if (feedSubscription) feedSubscription.unsubscribe();
     // Don't clear existing events — keep showing old data while refreshing.
     // New events will merge in as they arrive from the network.
+    setLoadFailed(false);
     setPendingPollEvents([]);
     setRefreshing(true);
     // Temporarily treat incoming events as direct (not pending) during refresh
@@ -414,7 +436,7 @@ export const PollFeed = () => {
       <Box sx={{ flex: 1, minHeight: 0 }}>
         <UnifiedFeed
           data={combinedEvents}
-          loading={loadingInitial}
+          loading={loadingInitial && !loadFailed}
           loadingMore={loadingMore}
           refreshing={refreshing}
           onEndReached={loadMore}
@@ -423,6 +445,11 @@ export const PollFeed = () => {
           newItemCount={pendingPollEvents.length}
           onShowNewItems={showNewPolls}
           newItemLabel="polls"
+          emptyState={
+            (loadFailed || (!loadingInitial && combinedEvents.length === 0))
+              ? <FeedError message="Couldn't load polls" onRetry={refreshFeed} />
+              : undefined
+          }
           itemContent={(_, event) => (
             <PollFeedItem
               event={event}

@@ -1,3 +1,10 @@
+# 1.8.5
+
+- Add zapped by following feed.
+- Fix Account Switch issues.
+- Fix notification renderer issues
+- Load User Feeds from users outbox relays.
+
 # 1.8.3
 
 - Add Edits interoperable with Amethsyt

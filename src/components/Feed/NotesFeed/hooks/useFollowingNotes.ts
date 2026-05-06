@@ -5,14 +5,19 @@ import { nostrRuntime } from "../../../../singletons";
 import { useUserContext } from "../../../../hooks/useUserContext";
 import { getRelaysForAuthors, prefetchOutboxRelays } from "../../../../nostr/OutboxService";
 
+const FETCH_TIMEOUT_MS = 8000;
+
 export const useFollowingNotes = () => {
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
   const [version, setVersion] = useState(0);
   const [pendingCount, setPendingCount] = useState(0);
   const missingNotesRef = useRef<Set<string>>(new Set());
   const initialLoadDoneRef = useRef(false);
   const oldestEventTimestampRef = useRef<number | null>(null);
+  const loadingRef = useRef(false);
 
   const { relays } = useRelays();
   const { user } = useUserContext();
@@ -71,7 +76,7 @@ export const useFollowingNotes = () => {
   // follows are loaded). First attempt uses defaultRelays; this catches the race where
   // those relays didn't have the events but user-specific relays do.
   useEffect(() => {
-    if (!user?.follows?.length || !relays?.length || initialLoadDoneRef.current || loadingMore) return;
+    if (!user?.follows?.length || !relays?.length || initialLoadDoneRef.current || loadingRef.current) return;
     fetchNotes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [relays]);
@@ -107,7 +112,14 @@ export const useFollowingNotes = () => {
 
   // Load older notes (pagination down) or initial load
   const fetchNotes = useCallback(async (fresh?: boolean) => {
-    if (!user?.follows?.length || loadingMore) return;
+    if (!user?.follows?.length) {
+      // User has no follows yet — nothing to fetch, mark as done so the spinner clears
+      setInitialLoadDone(true);
+      return;
+    }
+    if (loadingRef.current) return;
+    loadingRef.current = true;
+    setLoadFailed(false);
     if (fresh) setRefreshing(true); else setLoadingMore(true);
     const authors = Array.from(user.follows);
 
@@ -139,6 +151,21 @@ export const useFollowingNotes = () => {
     }
 
     let hasNewEvents = false;
+    let fetchDone = false;
+    let timeoutId: ReturnType<typeof setTimeout>;
+
+    const finishFetch = (failed = false) => {
+      if (fetchDone) return;
+      fetchDone = true;
+      clearTimeout(timeoutId);
+      loadingRef.current = false;
+      setLoadingMore(false);
+      setRefreshing(false);
+      initialLoadDoneRef.current = true;
+      setInitialLoadDone(true);
+      if (failed) setLoadFailed(true);
+    };
+
     const handle = nostrRuntime.subscribe(gossipRelays, [noteFilter, repostFilter, deletionFilter], {
       onEvent: (event: Event) => {
         if (event.kind === 6) {
@@ -154,13 +181,16 @@ export const useFollowingNotes = () => {
         handle.unsubscribe();
         if (hasNewEvents) setVersion((v) => v + 1);
         startMissingNotesFetcher();
-        setLoadingMore(false);
-        setRefreshing(false);
-        initialLoadDoneRef.current = true;
+        finishFetch();
       },
       fresh,
     });
-  }, [user?.follows, relays, loadingMore, startMissingNotesFetcher]);
+
+    timeoutId = setTimeout(() => {
+      handle.unsubscribe();
+      finishFetch(true);
+    }, FETCH_TIMEOUT_MS);
+  }, [user?.follows, relays, startMissingNotesFetcher]);
 
   const refreshNotes = useCallback(() => {
     initialLoadDoneRef.current = false;
@@ -168,6 +198,8 @@ export const useFollowingNotes = () => {
     oldestEventTimestampRef.current = null;
     setVersion(0);
     setPendingCount(0);
+    setInitialLoadDone(false);
+    setLoadFailed(false);
     fetchNotes(true);
   }, [fetchNotes]);
 
@@ -179,7 +211,9 @@ export const useFollowingNotes = () => {
     checkForNewer,
     loadingMore,
     refreshing,
+    loadFailed,
     pendingCount,
     mergeNewNotes,
+    initialLoadDone,
   };
 };

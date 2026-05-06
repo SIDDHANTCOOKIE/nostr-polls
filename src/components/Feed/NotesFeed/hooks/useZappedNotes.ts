@@ -28,8 +28,12 @@ function parseZapRecord(event: Event): ZapRecord {
   return { zapEvent: event, senderPubkey, sats };
 }
 
+const FETCH_TIMEOUT_MS = 8000;
+
 export const useZappedNotes = (user: any) => {
   const [loading, setLoading] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
   const [version, setVersion] = useState(0);
   const { relays } = useRelays();
 
@@ -73,8 +77,10 @@ export const useZappedNotes = (user: any) => {
   }, [user?.follows, version, zapRecords]);
 
   const fetchZappedNotes = useCallback(async () => {
-    if (!user?.follows?.length || loadingRef.current) return;
+    if (!user?.follows?.length) { setInitialLoadDone(true); return; }
+    if (loadingRef.current) return;
     loadingRef.current = true;
+    setLoadFailed(false);
     setLoading(true);
 
     const zapFilter: Filter = {
@@ -90,6 +96,22 @@ export const useZappedNotes = (user: any) => {
     }
 
     const zappedNoteIds: string[] = [];
+    let fetchDone = false;
+    let timeoutId: ReturnType<typeof setTimeout>;
+
+    const finishFetch = (failed = false) => {
+      if (fetchDone) return;
+      fetchDone = true;
+      clearTimeout(timeoutId);
+      loadingRef.current = false;
+      setLoading(false);
+      setInitialLoadDone(true);
+      if (failed) {
+        setLoadFailed(true);
+      } else {
+        setVersion((v) => v + 1);
+      }
+    };
 
     const handle = nostrRuntime.subscribe(relays, [zapFilter], {
       onEvent: (event) => {
@@ -123,17 +145,18 @@ export const useZappedNotes = (user: any) => {
       },
     });
 
-    const finishFetch = () => {
-      setVersion((v) => v + 1);
-      loadingRef.current = false;
-      setLoading(false);
-    };
+    timeoutId = setTimeout(() => {
+      handle.unsubscribe();
+      finishFetch(true);
+    }, FETCH_TIMEOUT_MS);
   }, [user?.follows, relays]);
 
   const refreshZappedNotes = useCallback(() => {
     oldestTimestampRef.current = null;
     loadingRef.current = false;
     setVersion(0);
+    setInitialLoadDone(false);
+    setLoadFailed(false);
     fetchZappedNotes();
   }, [fetchZappedNotes]);
 
@@ -143,5 +166,7 @@ export const useZappedNotes = (user: any) => {
     fetchZappedNotes,
     refreshZappedNotes,
     loading,
+    loadFailed,
+    initialLoadDone,
   };
 };

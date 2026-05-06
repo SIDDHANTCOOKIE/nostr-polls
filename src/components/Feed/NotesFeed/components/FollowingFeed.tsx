@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { Button } from "@mui/material";
+import FeedError from "../../FeedError";
 import { useUserContext } from "../../../../hooks/useUserContext";
 import RepostsCard from "./RepostedNoteCard";
 import { useFollowingNotes } from "../hooks/useFollowingNotes";
@@ -18,7 +19,7 @@ const FollowingFeed = ({
   onRegisterRefresh?: (fn: () => void) => void;
 }) => {
   const { user, requestLogin } = useUserContext();
-  const { notes, reposts, fetchNotes, refreshNotes, checkForNewer, loadingMore, refreshing, pendingCount, mergeNewNotes } =
+  const { notes, reposts, fetchNotes, refreshNotes, checkForNewer, loadingMore, refreshing, loadFailed, pendingCount, mergeNewNotes, initialLoadDone } =
     useFollowingNotes();
 
   // Register refresh with parent header button
@@ -87,7 +88,7 @@ const FollowingFeed = ({
     <div style={{ height: "100%", overflow: "hidden" }}>
       <UnifiedFeed
         data={mergedNotes}
-        loading={loadingMore && mergedNotes.length === 0}
+        loading={!initialLoadDone && !loadFailed}
         loadingMore={loadingMore && mergedNotes.length > 0}
         followOutput={false}
         onEndReached={fetchNotes}
@@ -98,6 +99,11 @@ const FollowingFeed = ({
         newItemCount={pendingCount}
         onShowNewItems={mergeNewNotes}
         newItemLabel="notes"
+        emptyState={
+          (loadFailed || (initialLoadDone && mergedNotes.length === 0))
+            ? <FeedError message="Couldn't load notes" onRetry={refreshNotes} />
+            : undefined
+        }
         itemContent={(index, item) => (
           <RepostsCard
             note={item.note}

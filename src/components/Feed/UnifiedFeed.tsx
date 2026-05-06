@@ -120,18 +120,7 @@ function UnifiedFeed<T>({
   // Embedded mode: no container div, no scroll hooks — early returns are safe.
   if (isEmbedded) {
     if (showLoading) {
-      return (
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            minHeight: "200px",
-          }}
-        >
-          <CircularProgress />
-        </Box>
-      );
+      return <Box sx={{ minHeight: "200px" }} />;
     }
     if (showEmpty) {
       return <>{emptyState}</>;
@@ -160,7 +149,7 @@ function UnifiedFeed<T>({
 
   const feedContent = (
     <>
-      <div ref={containerRef} style={{ height: "100%" }}>
+      <div ref={containerRef} style={{ height: "100%", position: "relative" }}>
         {(refreshing || loading || loadingMore) && (
           <LinearProgress
             sx={{
@@ -175,7 +164,6 @@ function UnifiedFeed<T>({
         )}
         {headerContent}
         {showLoading ? (
-          // Show a spacer while loading — the LinearProgress bar above signals activity
           <Box sx={{ minHeight: "200px" }} />
         ) : showEmpty ? (
           <>{emptyState}</>

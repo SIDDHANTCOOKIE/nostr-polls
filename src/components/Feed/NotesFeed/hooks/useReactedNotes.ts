@@ -3,8 +3,12 @@ import { Event, Filter } from "nostr-tools";
 import { useRelays } from "../../../../hooks/useRelays";
 import { nostrRuntime } from "../../../../singletons";
 
+const FETCH_TIMEOUT_MS = 8000;
+
 export const useReactedNotes = (user: any) => {
   const [loading, setLoading] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
   const [version, setVersion] = useState(0);
   const { relays } = useRelays();
 
@@ -50,8 +54,10 @@ export const useReactedNotes = (user: any) => {
   }, [user?.follows, version, reactionEvents]);
 
   const fetchReactedNotes = useCallback(async () => {
-    if (!user?.follows?.length || loadingRef.current) return;
+    if (!user?.follows?.length) { setInitialLoadDone(true); return; }
+    if (loadingRef.current) return;
     loadingRef.current = true;
+    setLoadFailed(false);
     setLoading(true);
 
     const reactionFilter: Filter = {
@@ -67,6 +73,22 @@ export const useReactedNotes = (user: any) => {
     }
 
     let reactedNoteIds: string[] = [];
+    let fetchDone = false;
+    let timeoutId: ReturnType<typeof setTimeout>;
+
+    const finishFetch = (failed = false) => {
+      if (fetchDone) return;
+      fetchDone = true;
+      clearTimeout(timeoutId);
+      loadingRef.current = false;
+      setLoading(false);
+      setInitialLoadDone(true);
+      if (failed) {
+        setLoadFailed(true);
+      } else {
+        setVersion((v) => v + 1);
+      }
+    };
 
     const reactionHandle = nostrRuntime.subscribe(relays, [reactionFilter], {
       onEvent: (event) => {
@@ -94,17 +116,18 @@ export const useReactedNotes = (user: any) => {
       },
     });
 
-    const finishFetch = () => {
-      setVersion((v) => v + 1);
-      loadingRef.current = false;
-      setLoading(false);
-    };
+    timeoutId = setTimeout(() => {
+      reactionHandle.unsubscribe();
+      finishFetch(true);
+    }, FETCH_TIMEOUT_MS);
   }, [user?.follows, relays]);
 
   const refreshReactedNotes = useCallback(() => {
     oldestTimestampRef.current = null;
     loadingRef.current = false;
     setVersion(0);
+    setInitialLoadDone(false);
+    setLoadFailed(false);
     fetchReactedNotes();
   }, [fetchReactedNotes]);
 
@@ -114,5 +137,7 @@ export const useReactedNotes = (user: any) => {
     fetchReactedNotes,
     refreshReactedNotes,
     loading,
+    loadFailed,
+    initialLoadDone,
   };
 };

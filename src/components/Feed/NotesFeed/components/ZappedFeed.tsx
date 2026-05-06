@@ -4,10 +4,11 @@ import { useZappedNotes } from "../hooks/useZappedNotes";
 import ZappedNoteCard from "./ZappedNoteCard";
 import { Event } from "nostr-tools";
 import UnifiedFeed from "../../UnifiedFeed";
+import FeedError from "../../FeedError";
 
 const ZappedFeed = ({ onRegisterRefresh }: { onRegisterRefresh?: (fn: () => void) => void }) => {
   const { user } = useUserContext();
-  const { zappedEvents, zapRecords, fetchZappedNotes, refreshZappedNotes, loading } =
+  const { zappedEvents, zapRecords, fetchZappedNotes, refreshZappedNotes, loading, loadFailed, initialLoadDone } =
     useZappedNotes(user);
   const fetchedRef = useRef(false);
 
@@ -35,11 +36,15 @@ const ZappedFeed = ({ onRegisterRefresh }: { onRegisterRefresh?: (fn: () => void
   return (
     <UnifiedFeed
       data={sorted}
-      loading={loading && sorted.length === 0}
+      loading={!initialLoadDone && !loadFailed}
       loadingMore={loading && sorted.length > 0}
       onEndReached={fetchZappedNotes}
       onRefresh={refreshZappedNotes}
-      refreshing={loading && sorted.length > 0}
+      emptyState={
+        (loadFailed || (initialLoadDone && sorted.length === 0))
+          ? <FeedError message="Couldn't load zapped notes" onRetry={refreshZappedNotes} />
+          : undefined
+      }
       itemContent={(index, note: Event) => (
         <ZappedNoteCard
           key={note.id}

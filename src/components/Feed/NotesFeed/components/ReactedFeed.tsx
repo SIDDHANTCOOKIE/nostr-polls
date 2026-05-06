@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import FeedError from "../../FeedError";
 import { useUserContext } from "../../../../hooks/useUserContext";
 import { useReactedNotes } from "../hooks/useReactedNotes";
 import ReactedNoteCard from "./ReactedNoteCard";
@@ -7,7 +8,7 @@ import UnifiedFeed from "../../UnifiedFeed";
 
 const ReactedFeed = ({ onRegisterRefresh }: { onRegisterRefresh?: (fn: () => void) => void }) => {
   const { user } = useUserContext();
-  const { reactedEvents, reactionEvents, fetchReactedNotes, refreshReactedNotes, loading } =
+  const { reactedEvents, reactionEvents, fetchReactedNotes, refreshReactedNotes, loading, loadFailed, initialLoadDone } =
     useReactedNotes(user);
   const fetchedRef = useRef(false);
 
@@ -30,11 +31,15 @@ const ReactedFeed = ({ onRegisterRefresh }: { onRegisterRefresh?: (fn: () => voi
   return (
     <UnifiedFeed
       data={sorted}
-      loading={loading && sorted.length === 0}
+      loading={!initialLoadDone && !loadFailed}
       loadingMore={loading && sorted.length > 0}
       onEndReached={fetchReactedNotes}
       onRefresh={refreshReactedNotes}
-      refreshing={loading && sorted.length > 0}
+      emptyState={
+        (loadFailed || (initialLoadDone && sorted.length === 0))
+          ? <FeedError message="Couldn't load reacted notes" onRetry={refreshReactedNotes} />
+          : undefined
+      }
       itemContent={(index, note: Event) => (
         <ReactedNoteCard
           key={note.id}
