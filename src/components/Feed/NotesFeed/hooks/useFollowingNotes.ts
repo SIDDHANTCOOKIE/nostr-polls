@@ -150,24 +150,38 @@ export const useFollowingNotes = () => {
       deletionFilter.until = oldestEventTimestampRef.current;
     }
 
-    let hasNewEvents = false;
     let fetchDone = false;
     let timeoutId: ReturnType<typeof setTimeout>;
+    let renderDebounceId: ReturnType<typeof setTimeout> | null = null;
+    let eventCount = 0;
+    let firstEventHandled = false;
+
+    // Debounced version bump — coalesces bursts of events into a single re-render.
+    const scheduleRender = () => {
+      if (renderDebounceId) return;
+      renderDebounceId = setTimeout(() => {
+        renderDebounceId = null;
+        setVersion((v) => v + 1);
+      }, 200);
+    };
 
     const finishFetch = (failed = false) => {
       if (fetchDone) return;
       fetchDone = true;
       clearTimeout(timeoutId);
+      if (renderDebounceId) { clearTimeout(renderDebounceId); renderDebounceId = null; }
       loadingRef.current = false;
       setLoadingMore(false);
       setRefreshing(false);
       initialLoadDoneRef.current = true;
       setInitialLoadDone(true);
-      if (failed) setLoadFailed(true);
+      // Only flag failed if zero events arrived — partial loads still render fine.
+      if (failed && eventCount === 0) setLoadFailed(true);
     };
 
     const handle = nostrRuntime.subscribe(gossipRelays, [noteFilter, repostFilter, deletionFilter], {
       onEvent: (event: Event) => {
+        eventCount++;
         if (event.kind === 6) {
           const originalNoteId = event.tags.find((t) => t[0] === "e")?.[1];
           if (originalNoteId) missingNotesRef.current.add(originalNoteId);
@@ -175,11 +189,20 @@ export const useFollowingNotes = () => {
         if (oldestEventTimestampRef.current === null || event.created_at < oldestEventTimestampRef.current) {
           oldestEventTimestampRef.current = event.created_at;
         }
-        hasNewEvents = true;
+        // First event: clear the spinner immediately and render synchronously.
+        // Subsequent events: debounce so a burst doesn't thrash React.
+        if (!firstEventHandled) {
+          firstEventHandled = true;
+          initialLoadDoneRef.current = true;
+          setInitialLoadDone(true);
+          setVersion((v) => v + 1);
+        } else {
+          scheduleRender();
+        }
       },
       onEose: () => {
         handle.unsubscribe();
-        if (hasNewEvents) setVersion((v) => v + 1);
+        if (eventCount > 0) setVersion((v) => v + 1);
         startMissingNotesFetcher();
         finishFetch();
       },

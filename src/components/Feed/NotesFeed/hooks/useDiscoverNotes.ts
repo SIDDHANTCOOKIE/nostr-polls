@@ -98,16 +98,35 @@ export const useDiscoverNotes = () => {
             deletionFilter.since = now - 86400;
         }
 
-        let hasNewEvents = false;
+        let eventCount = 0;
+        let firstEventHandled = false;
+        let renderDebounceId: ReturnType<typeof setTimeout> | null = null;
+
+        const scheduleRender = () => {
+            if (renderDebounceId) return;
+            renderDebounceId = setTimeout(() => {
+                renderDebounceId = null;
+                setVersion((v) => v + 1);
+            }, 200);
+        };
+
         const handle = nostrRuntime.subscribe(relays, [filter, deletionFilter], {
             onEvent: (event: any) => {
-                hasNewEvents = true;
+                eventCount++;
                 if (oldestTimestampRef.current === null || event.created_at < oldestTimestampRef.current) {
                     oldestTimestampRef.current = event.created_at;
                 }
+                if (!firstEventHandled) {
+                    firstEventHandled = true;
+                    setInitialLoadComplete(true);
+                    setVersion((v) => v + 1);
+                } else {
+                    scheduleRender();
+                }
             },
             onEose: () => {
-                if (hasNewEvents) setVersion((v) => v + 1);
+                if (renderDebounceId) { clearTimeout(renderDebounceId); renderDebounceId = null; }
+                if (eventCount > 0) setVersion((v) => v + 1);
                 setLoadingMore(false);
                 setRefreshing(false);
                 setInitialLoadComplete(true);
@@ -120,7 +139,9 @@ export const useDiscoverNotes = () => {
         subscriptionHandleRef.current = handle;
 
         const timeout = setTimeout(() => {
+            if (renderDebounceId) { clearTimeout(renderDebounceId); renderDebounceId = null; }
             setLoadingMore(false);
+            setRefreshing(false);
             setInitialLoadComplete(true);
             loadingRef.current = false;
         }, LOAD_TIMEOUT_MS);
