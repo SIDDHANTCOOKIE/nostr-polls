@@ -1,3 +1,7 @@
+# 1.8.7
+
+- Fix stuck feeds
+
 # 1.8.5
 
 - Add zapped by following feed.
