@@ -1,3 +1,10 @@
+# 1.9.0
+
+- New on-device relay engine: a built-in local relay now stores everything you've seen and answers the app from local cache first, so feeds, profiles, and threads load instantly — even offline — and stay in sync with the network in the background.
+- All relay traffic (reads and writes) now flows through this engine off the main thread, so the app stays smooth and responsive even while it's busy syncing.
+- Faster repeat visits: notes, profiles, reactions, and zaps you've already loaded come straight from local storage instead of re-fetching from relays each time.
+- Fixed a Zap notification issue on Android.
+
 # 1.8.21
 
 - Zap notifications: you now get a push when someone zaps you, with the sats amount, on Android.
