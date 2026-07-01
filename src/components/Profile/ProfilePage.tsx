@@ -1,5 +1,5 @@
 import { copyToClipboard } from "../../utils/common";
-import React, { useCallback, useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   Typography,
@@ -30,9 +30,8 @@ import UserArticlesFeed from "./UserArticlesFeed";
 import UserRatingsGiven from "./UserRatingsGiven";
 import { useUserContext } from "../../hooks/useUserContext";
 import { useListContext } from "../../hooks/useListContext";
-import { dataLayer, type ObserveHandle } from "@formstr/local-relay";
+import { dataLayer } from "@formstr/local-relay";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import DownloadIcon from "@mui/icons-material/Download";
 import MailIcon from "@mui/icons-material/Mail";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { useNotification } from "../../contexts/notification-context";
@@ -45,6 +44,8 @@ import { FeedActionsProvider } from "../../contexts/FeedActionsContext";
 import CreateFAB from "../Feed/CreateFAB";
 import { ProfileEditModal } from "./ProfileEditModal";
 import { NetworkFollowedBy } from "./NetworkFollowedBy";
+import { ProfileListDialog } from "../Common/ProfileListDialog";
+import { useFollowersPagination } from "./useFollowersPagination";
 interface TabPanelProps {
   children?: React.ReactNode;
   index: number;
@@ -83,9 +84,10 @@ const ProfilePage: React.FC = () => {
   const [followsYou, setFollowsYou] = useState(false);
   const [showContactListWarning, setShowContactListWarning] = useState(false);
   const [pendingFollowKey, setPendingFollowKey] = useState<string | null>(null);
-  const [followerCount, setFollowerCount] = useState<number | null>(null);
   const [followingCount, setFollowingCount] = useState<number | null>(null);
-  const followersSetRef = useRef(new Set<string>());
+  const [followingPubkeys, setFollowingPubkeys] = useState<string[]>([]);
+  const [followingModalOpen, setFollowingModalOpen] = useState(false);
+  const [followersModalOpen, setFollowersModalOpen] = useState(false);
   const { relays } = useRelays();
   const { user, requestLogin } = useUserContext();
   const { followPubkey, getTrustScore, pendingFollows } = useListContext();
@@ -95,7 +97,13 @@ const ProfilePage: React.FC = () => {
 
   const [profileRelays, setProfileRelays] = useState<string[]>(relays);
 
-  const followersHandleRef = useRef<ObserveHandle | null>(null);
+  const {
+    pubkeys: followerPubkeys,
+    hasMore: hasMoreFollowers,
+    loadingMore: loadingMoreFollowers,
+    loadMore: loadMoreFollowers,
+  } = useFollowersPagination(pubkey, followersModalOpen);
+
   const relaysRef = useRef(relays);
   useEffect(() => { relaysRef.current = relays; }, [relays]);
 
@@ -112,6 +120,7 @@ const ProfilePage: React.FC = () => {
     if (!pubkey) return;
 
     setFollowingCount(null);
+    setFollowingPubkeys([]);
     setFollowsYou(false);
 
     let latestFollowingEvent: Event | null = null;
@@ -133,6 +142,7 @@ const ProfilePage: React.FC = () => {
             latestFollowingEvent = event;
             const pTags = event.tags.filter((t) => t[0] === "p");
             setFollowingCount(pTags.length);
+            setFollowingPubkeys(pTags.map((t) => t[1]).filter(Boolean));
             if (user && pTags.some((t) => t[1] === user.pubkey)) {
               setFollowsYou(true);
             }
@@ -145,44 +155,6 @@ const ProfilePage: React.FC = () => {
       followingHandle.unobserve();
     };
   }, [pubkey, profileRelays, user]);
-
-  // Reset followers state when pubkey changes, clean up any active subscription.
-  useEffect(() => {
-    followersSetRef.current = new Set();
-    setFollowerCount(null);
-    followersHandleRef.current?.unobserve();
-    followersHandleRef.current = null;
-
-    return () => {
-      followersHandleRef.current?.unobserve();
-      followersHandleRef.current = null;
-    };
-  }, [pubkey, profileRelays]);
-
-  // Manually trigger followers subscription — streams counts as events arrive,
-  // only cleaned up on unmount or pubkey change (pool EOSE fires early).
-  const loadFollowers = useCallback(() => {
-    if (!pubkey || followersHandleRef.current) return;
-
-    followersSetRef.current = new Set();
-    setFollowerCount(0);
-
-    followersHandleRef.current = dataLayer.observe(
-      [
-        {
-          kinds: [3],
-          "#p": [pubkey],
-          limit: 500,
-        },
-      ],
-      {
-        onEvent: (event: Event) => {
-          followersSetRef.current.add(event.pubkey);
-          setFollowerCount(followersSetRef.current.size);
-        },
-      },
-    );
-  }, [pubkey]);
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -534,25 +506,35 @@ const ProfilePage: React.FC = () => {
               justifyContent: { xs: "center", sm: "flex-start" },
             }}
           >
-            {followerCount !== null ? (
-              <Typography variant="body2" color="text.secondary">
-                <strong>{followerCount}</strong> followers
-              </Typography>
-            ) : (
-              <Tooltip title="Load followers">
-                <IconButton size="small" onClick={loadFollowers}>
-                  <DownloadIcon sx={{ fontSize: 18 }} />{" "}
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    style={{ marginLeft: 2 }}
-                  >
-                    followers{" "}
-                  </Typography>
-                </IconButton>
-              </Tooltip>
-            )}
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{
+                cursor: "pointer",
+                "&:hover": { textDecoration: "underline" },
+              }}
+              onClick={() => setFollowersModalOpen(true)}
+            >
+              <strong>
+                {followerPubkeys.length > 0
+                  ? `${followerPubkeys.length}${hasMoreFollowers ? "+" : ""}`
+                  : "–"}
+              </strong>{" "}
+              followers
+            </Typography>
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{
+                cursor: followingCount ? "pointer" : "default",
+                "&:hover": followingCount
+                  ? { textDecoration: "underline" }
+                  : undefined,
+              }}
+              onClick={() => {
+                if (followingCount) setFollowingModalOpen(true);
+              }}
+            >
               <strong>{followingCount ?? "–"}</strong> following
             </Typography>
           </Box>
@@ -658,6 +640,29 @@ const ProfilePage: React.FC = () => {
         open={editModalOpen}
         onClose={() => setEditModalOpen(false)}
         userProfile={profile}
+      />
+
+      {/* Following / Followers list modals */}
+      <ProfileListDialog
+        open={followingModalOpen}
+        onClose={() => setFollowingModalOpen(false)}
+        pubkeys={followingPubkeys}
+        title="Following"
+        subtitle={`${followingPubkeys.length} ${
+          followingPubkeys.length === 1 ? "account" : "accounts"
+        }`}
+      />
+      <ProfileListDialog
+        open={followersModalOpen}
+        onClose={() => setFollowersModalOpen(false)}
+        pubkeys={followerPubkeys}
+        title="Followers"
+        subtitle={`${followerPubkeys.length}${
+          hasMoreFollowers ? "+" : ""
+        } ${followerPubkeys.length === 1 ? "account" : "accounts"}`}
+        hasMore={hasMoreFollowers}
+        loadingMore={loadingMoreFollowers}
+        onLoadMore={loadMoreFollowers}
       />
     </FeedActionsProvider>
   );

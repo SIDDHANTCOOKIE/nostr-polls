@@ -2,6 +2,8 @@ import React, { useEffect } from "react";
 import {
   Avatar,
   Box,
+  Button,
+  CircularProgress,
   Dialog,
   DialogContent,
   DialogTitle,
@@ -28,6 +30,10 @@ interface ProfileListDialogProps {
   title: string;
   subtitle?: string;
   renderAction?: (pubkey: string) => React.ReactNode;
+  /** Present a "Load more" row (e.g. paging a followers subscription). */
+  hasMore?: boolean;
+  loadingMore?: boolean;
+  onLoadMore?: () => void;
 }
 
 export const ProfileListDialog: React.FC<ProfileListDialogProps> = ({
@@ -37,6 +43,9 @@ export const ProfileListDialog: React.FC<ProfileListDialogProps> = ({
   title,
   subtitle,
   renderAction,
+  hasMore,
+  loadingMore,
+  onLoadMore,
 }) => {
   const { profiles, fetchUserProfileThrottled } = useAppContext();
   const navigate = useNavigate();
@@ -119,6 +128,22 @@ export const ProfileListDialog: React.FC<ProfileListDialogProps> = ({
             );
           })}
         </List>
+        {hasMore && (
+          <Box sx={{ display: "flex", justifyContent: "center", py: 1.5 }}>
+            <Button
+              size="small"
+              onClick={onLoadMore}
+              disabled={loadingMore}
+              startIcon={
+                loadingMore ? (
+                  <CircularProgress size={14} color="inherit" />
+                ) : undefined
+              }
+            >
+              {loadingMore ? "Loading…" : "Load more"}
+            </Button>
+          </Box>
+        )}
       </DialogContent>
     </Dialog>
   );
