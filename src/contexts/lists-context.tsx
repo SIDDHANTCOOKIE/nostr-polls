@@ -732,7 +732,15 @@ export function ListProvider({ children }: { children: ReactNode }) {
     if (!user) return;
     if (user) {
       if (!lists) fetchLists();
-      if (!user.follows || user.follows.length === 0) fetchContacts();
+      // Always keep a standing kind-3 subscription open to revalidate the
+      // contact list against relays — NOT just when follows is empty. Cached
+      // follows (seeded from localStorage on login) make `user.follows`
+      // non-empty, so gating on emptiness meant a stale cache was never
+      // refreshed and stayed stale forever (button stuck on "Follow").
+      // `fetchContacts` is idempotent (unobserves the prior handle first) and
+      // `handleContactListEvent` only commits genuinely newer lists, so this is
+      // safe to (re)run; the ref guard keeps it to one subscription per account.
+      if (!contactHandleRef.current) fetchContacts();
       if (!wotAttemptedRef.current && (!user.webOfTrust || user.webOfTrust.size === 0))
         subscribeToContacts();
       if (!myTopics) fetchMyTopics();
@@ -856,7 +864,14 @@ export function ListProvider({ children }: { children: ReactNode }) {
 
     const existingTags = contactEvent?.tags || [];
     const pTags = existingTags.filter(([t]) => t === "p").map(([, pk]) => pk);
-    if (pTags.includes(pubkeyToAdd)) return "ok";
+    if (pTags.includes(pubkeyToAdd)) {
+      // Already following per the authoritative fetched list, but the UI's
+      // `user.follows`/cache may be stale (e.g. followed from another client),
+      // which leaves the button stuck on "Follow" and every click a silent
+      // no-op. Reconcile UI + cache so the button flips to "Following".
+      if (contactEvent) await handleContactListEvent(contactEvent);
+      return "ok";
+    }
 
     addPendingFollow(pubkeyToAdd);
     try {
