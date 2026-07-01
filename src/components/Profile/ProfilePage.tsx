@@ -19,9 +19,9 @@ import {
   Tooltip,
   Divider,
 } from "@mui/material";
-import { Event, EventTemplate, nip19 } from "nostr-tools";
+import { Event, nip19 } from "nostr-tools";
 import { useRelays } from "../../hooks/useRelays";
-import { fetchUserProfile, signEvent } from "../../nostr";
+import { fetchUserProfile } from "../../nostr";
 import { DEFAULT_IMAGE_URL } from "../../utils/constants";
 import Rate from "../Ratings/Rate";
 import UserPollsFeed from "./UserPollsFeed";
@@ -87,8 +87,8 @@ const ProfilePage: React.FC = () => {
   const [followingCount, setFollowingCount] = useState<number | null>(null);
   const followersSetRef = useRef(new Set<string>());
   const { relays } = useRelays();
-  const { user, requestLogin, setUser } = useUserContext();
-  const { fetchLatestContactList, getTrustScore } = useListContext();
+  const { user, requestLogin } = useUserContext();
+  const { followPubkey, getTrustScore, pendingFollows } = useListContext();
   const { showNotification } = useNotification();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
@@ -250,42 +250,11 @@ const ProfilePage: React.FC = () => {
 
     if (!pubkey) return;
 
-    const contactEvent = await fetchLatestContactList();
-
-    if (!contactEvent) {
+    const result = await followPubkey(pubkey);
+    if (result === "no-contact-list") {
       setPendingFollowKey(pubkey);
       setShowContactListWarning(true);
-      return;
     }
-
-    await updateContactList(contactEvent, pubkey);
-  };
-
-  const updateContactList = async (
-    contactEvent: Event | null,
-    pubkeyToAdd: string,
-  ) => {
-    const existingTags = contactEvent?.tags || [];
-    const pTags = existingTags.filter(([t]) => t === "p").map(([, pk]) => pk);
-
-    if (pTags.includes(pubkeyToAdd)) return;
-
-    const updatedTags = [...existingTags, ["p", pubkeyToAdd]];
-
-    const newEvent: EventTemplate = {
-      kind: 3,
-      created_at: Math.floor(Date.now() / 1000),
-      tags: updatedTags,
-      content: contactEvent?.content || "",
-    };
-
-    const signed = await signEvent(newEvent);
-    dataLayer.publishEvent(signed);
-    setUser({
-      pubkey: signed.pubkey,
-      ...user,
-      follows: [...pTags, pubkeyToAdd],
-    });
   };
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
@@ -490,8 +459,18 @@ const ProfilePage: React.FC = () => {
                     variant="contained"
                     size="small"
                     onClick={addToContacts}
+                    disabled={pendingFollows.has(pubkey)}
+                    startIcon={
+                      pendingFollows.has(pubkey) ? (
+                        <CircularProgress size={16} color="inherit" />
+                      ) : undefined
+                    }
                   >
-                    {followsYou ? "Follow Back" : "Follow"}
+                    {pendingFollows.has(pubkey)
+                      ? "Following…"
+                      : followsYou
+                        ? "Follow Back"
+                        : "Follow"}
                   </Button>
                 )}
                 <Button
@@ -590,8 +569,8 @@ const ProfilePage: React.FC = () => {
           aria-label="profile tabs"
           variant="fullWidth"
         >
-          <Tab label="Polls" />
           <Tab label="Notes" />
+          <Tab label="Polls" />
           <Tab label="Articles" />
           <Tab label="Ratings" />
         </Tabs>
@@ -599,14 +578,14 @@ const ProfilePage: React.FC = () => {
 
       {/* Tab Content */}
       <TabPanel value={tabValue} index={0}>
-        <UserPollsFeed
+        <UserNotesFeed
           pubkey={pubkey}
           relays={profileRelays}
           scrollContainerRef={scrollContainerRef}
         />
       </TabPanel>
       <TabPanel value={tabValue} index={1}>
-        <UserNotesFeed
+        <UserPollsFeed
           pubkey={pubkey}
           relays={profileRelays}
           scrollContainerRef={scrollContainerRef}
@@ -645,7 +624,7 @@ const ProfilePage: React.FC = () => {
           <Button
             onClick={() => {
               if (pendingFollowKey) {
-                updateContactList(null, pendingFollowKey);
+                followPubkey(pendingFollowKey, { allowEmptyContactList: true });
               }
               setShowContactListWarning(false);
               setPendingFollowKey(null);

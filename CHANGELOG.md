@@ -1,3 +1,10 @@
+# 1.13.0
+
+- Profiles now open on Notes by default, split into two tabs: Posts (a person's own notes) and Conversations (their replies), so you can quickly see what someone posts versus how they chime in.
+- Your follows now stick: fixed newly-followed accounts disappearing after an app restart. Following and unfollowing now save reliably and show up straight away.
+- Follow buttons now show progress: tapping Follow displays a spinner while it's being saved, so you know it's working.
+- Fresh set of client tag options to label your posts with, for when you're feeling spicy.
+
 # 1.12.0
 
 - Choose how your posts are labelled: pick which client tag is attached to notes and polls you publish — choose from a list of presets (including Pollerama) or enter your own.

@@ -1,12 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { Avatar, Box, Button, CircularProgress, Typography } from "@mui/material";
-import { EventTemplate, nip19 } from "nostr-tools";
+import { nip19 } from "nostr-tools";
 import { useNavigate } from "react-router-dom";
-import { dataLayer } from "@formstr/local-relay";
 import { useUserContext } from "../../hooks/useUserContext";
 import { useListContext } from "../../hooks/useListContext";
 import { useAppContext } from "../../hooks/useAppContext";
-import { signEvent, openProfileTab } from "../../nostr";
+import { openProfileTab } from "../../nostr";
 import { DEFAULT_IMAGE_URL } from "../../utils/constants";
 
 const MAX_SUGGESTIONS = 12;
@@ -18,8 +17,8 @@ const MAX_SUGGESTIONS = 12;
  * safe to drop atop any discovery surface.
  */
 export const WhoToFollow: React.FC = () => {
-  const { user, setUser } = useUserContext();
-  const { getFollowRecommendations, fetchLatestContactList } = useListContext();
+  const { user } = useUserContext();
+  const { getFollowRecommendations, followPubkey } = useListContext();
   const { profiles, fetchUserProfileThrottled } = useAppContext();
   const navigate = useNavigate();
   const [followingPks, setFollowingPks] = useState<Set<string>>(new Set());
@@ -34,28 +33,16 @@ export const WhoToFollow: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recommendations.length]);
 
-  // Mirrors the follow flow in FollowPackMembersDialog: append a `p` tag to the
-  // latest kind-3, publish, and optimistically update `follows` (which drops the
-  // person from the list on the next render via getFollowRecommendations).
+  // Delegate to the shared follow flow, which publishes the updated kind-3 AND
+  // commits it to the durable contacts cache + in-memory follows (dropping the
+  // person from the list on the next render via getFollowRecommendations). These
+  // suggestions only exist when the user already has a contact list, so allow the
+  // empty case rather than surfacing the no-list warning here.
   const handleFollow = async (pk: string) => {
     if (!user || followingPks.has(pk)) return;
     setFollowingPks((prev) => new Set(prev).add(pk));
     try {
-      const contactEvent = await fetchLatestContactList();
-      const existingTags = contactEvent?.tags || [];
-      const pTags = existingTags.filter(([t]) => t === "p").map(([, p]) => p);
-      if (pTags.includes(pk)) return;
-      const newEvent: EventTemplate = {
-        kind: 3,
-        created_at: Math.floor(Date.now() / 1000),
-        tags: [...existingTags, ["p", pk]],
-        content: contactEvent?.content || "",
-      };
-      const signed = await signEvent(newEvent);
-      dataLayer.publishEvent(signed);
-      setUser((prev) =>
-        prev ? { ...prev, follows: [...(prev.follows || []), pk] } : prev,
-      );
+      await followPubkey(pk, { allowEmptyContactList: true });
     } finally {
       setFollowingPks((prev) => {
         const s = new Set(prev);

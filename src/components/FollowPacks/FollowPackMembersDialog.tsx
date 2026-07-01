@@ -1,11 +1,8 @@
 import React, { useState } from "react";
 import { Button, CircularProgress } from "@mui/material";
-import { EventTemplate } from "nostr-tools";
 import { useUserContext } from "../../hooks/useUserContext";
 import { useListContext } from "../../hooks/useListContext";
 import { ProfileListDialog } from "../Common/ProfileListDialog";
-import { signEvent } from "../../nostr";
-import { dataLayer } from "@formstr/local-relay";
 
 interface FollowPackMembersDialogProps {
   open: boolean;
@@ -20,8 +17,8 @@ export const FollowPackMembersDialog: React.FC<FollowPackMembersDialogProps> = (
   memberPubkeys,
   packTitle,
 }) => {
-  const { user, setUser } = useUserContext();
-  const { fetchLatestContactList } = useListContext();
+  const { user } = useUserContext();
+  const { followPubkey } = useListContext();
   const [followingPks, setFollowingPks] = useState<Set<string>>(new Set());
 
   const handleFollow = async (e: React.MouseEvent, pk: string) => {
@@ -29,21 +26,10 @@ export const FollowPackMembersDialog: React.FC<FollowPackMembersDialogProps> = (
     if (!user || followingPks.has(pk)) return;
     setFollowingPks((prev) => new Set(prev).add(pk));
     try {
-      const contactEvent = await fetchLatestContactList();
-      const existingTags = contactEvent?.tags || [];
-      const pTags = existingTags.filter(([t]) => t === "p").map(([, p]) => p);
-      if (pTags.includes(pk)) return;
-      const newEvent: EventTemplate = {
-        kind: 3,
-        created_at: Math.floor(Date.now() / 1000),
-        tags: [...existingTags, ["p", pk]],
-        content: contactEvent?.content || "",
-      };
-      const signed = await signEvent(newEvent);
-      dataLayer.publishEvent(signed);
-      setUser((prev) =>
-        prev ? { ...prev, follows: [...(prev.follows || []), pk] } : prev
-      );
+      // Shared follow flow: publishes the updated kind-3 AND commits it to the
+      // durable contacts cache + in-memory follows. Allow the empty case since
+      // this dialog has no no-contact-list confirmation of its own.
+      await followPubkey(pk, { allowEmptyContactList: true });
     } finally {
       setFollowingPks((prev) => {
         const s = new Set(prev);

@@ -111,7 +111,7 @@ const PollResponseForm: React.FC<PollResponseFormProps> = ({
   const { profiles, fetchUserProfileThrottled } = useAppContext();
   const { user, setUser, requestLogin } = useUserContext();
   const { relays } = useRelays();
-  const { fetchLatestContactList } = useListContext();
+  const { followPubkey } = useListContext();
   const { reportEvent, reportUser, isReportedByMe, getWoTReporters, wotReportThreshold, requestUserReportCheck } = useReports();
   const eventRelays = useEventRelays(pollEvent.id);
   const handleCloseContactWarning = () => setShowContactListWarning(false);
@@ -218,35 +218,14 @@ const PollResponseForm: React.FC<PollResponseFormProps> = ({
     }
   };
 
-  const updateContactList = async (
-    contactEvent: Event | null,
-    pubkeyToAdd: string
-  ) => {
-    const existingTags = contactEvent?.tags || [];
-    const pTags = existingTags.filter(([t]) => t === "p").map(([, pk]) => pk);
-    if (pTags.includes(pubkeyToAdd)) return;
-    const updatedTags = [...existingTags, ["p", pubkeyToAdd]];
-    const newEvent = {
-      kind: 3,
-      created_at: Math.floor(Date.now() / 1000),
-      tags: updatedTags,
-      content: contactEvent?.content || "",
-    };
-    const signed = await signEvent(newEvent);
-    dataLayer.publishEvent(signed);
-    setUser({ pubkey: signed.pubkey, ...user, follows: [...pTags, pubkeyToAdd] });
-  };
-
   const addToContacts = async () => {
     if (!user) { requestLogin(); return; }
     const pubkeyToAdd = pollEvent.pubkey;
-    const contactEvent = await fetchLatestContactList();
-    if (!contactEvent) {
+    const result = await followPubkey(pubkeyToAdd);
+    if (result === "no-contact-list") {
       setPendingFollowKey(pubkeyToAdd);
       setShowContactListWarning(true);
-      return;
     }
-    await updateContactList(contactEvent, pubkeyToAdd);
   };
 
   const displaySubmit = () => {
@@ -689,7 +668,7 @@ const PollResponseForm: React.FC<PollResponseFormProps> = ({
           <Button onClick={() => setShowContactListWarning(false)}>Cancel</Button>
           <Button
             onClick={() => {
-              if (pendingFollowKey) updateContactList(null, pendingFollowKey);
+              if (pendingFollowKey) followPubkey(pendingFollowKey, { allowEmptyContactList: true });
               setShowContactListWarning(false);
               setPendingFollowKey(null);
             }}

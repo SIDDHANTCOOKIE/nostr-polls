@@ -82,9 +82,9 @@ export const Notes: React.FC<NotesProps> = ({
 }) => {
   const navigate = useNavigate();
   const { profiles, fetchUserProfileThrottled, aiSettings, editsMap, editsHistoryMap, fetchEditsThrottled, addEventToMap } = useAppContext();
-  let { user, requestLogin, setUser } = useUserContext();
+  let { user, requestLogin } = useUserContext();
   let { relays } = useRelays();
-  let { fetchLatestContactList, unfollowContact } = useListContext();
+  let { followPubkey, unfollowContact, pendingFollows } = useListContext();
   // NIP-22 comments (kind 1111) scope their root with an uppercase "E" tag and
   // carry no lowercase "e" for a top-level comment, so fall back to "E" to keep
   // the referenced root (e.g. the poll being commented on) rendered inline.
@@ -210,16 +210,11 @@ export const Notes: React.FC<NotesProps> = ({
     }
 
     const pubkeyToAdd = event.pubkey;
-    const contactEvent = await fetchLatestContactList();
-
-    // New safeguard
-    if (!contactEvent) {
+    const result = await followPubkey(pubkeyToAdd);
+    if (result === "no-contact-list") {
       setPendingFollowKey(pubkeyToAdd);
       setShowContactListWarning(true);
-      return;
     }
-
-    await updateContactList(contactEvent, pubkeyToAdd);
   };
 
   const copyNoteUrl = async () => {
@@ -239,32 +234,6 @@ export const Notes: React.FC<NotesProps> = ({
     }
   };
 
-  const updateContactList = async (
-    contactEvent: Event | null,
-    pubkeyToAdd: string
-  ) => {
-    const existingTags = contactEvent?.tags || [];
-    const pTags = existingTags.filter(([t]) => t === "p").map(([, pk]) => pk);
-
-    if (pTags.includes(pubkeyToAdd)) return;
-
-    const updatedTags = [...existingTags, ["p", pubkeyToAdd]];
-
-    const newEvent: EventTemplate = {
-      kind: 3,
-      created_at: Math.floor(Date.now() / 1000),
-      tags: updatedTags,
-      content: contactEvent?.content || "",
-    };
-
-    const signed = await signEvent(newEvent);
-    dataLayer.publishEvent(signed);
-    setUser({
-      pubkey: signed.pubkey,
-      ...user,
-      follows: [...pTags, pubkeyToAdd],
-    });
-  };
 
   const handleContextMenu = (event: React.MouseEvent) => {
     const target = event.target as HTMLElement;
@@ -537,7 +506,18 @@ export const Notes: React.FC<NotesProps> = ({
             action={
               <Box sx={{ display: "flex", alignItems: "center" }}>
                 {user && !user.follows?.includes(event.pubkey) && (
-                  <Button size="small" onClick={addToContacts}>Follow</Button>
+                  <Button
+                    size="small"
+                    onClick={addToContacts}
+                    disabled={pendingFollows.has(event.pubkey)}
+                    startIcon={
+                      pendingFollows.has(event.pubkey) ? (
+                        <CircularProgress size={14} color="inherit" />
+                      ) : undefined
+                    }
+                  >
+                    {pendingFollows.has(event.pubkey) ? "Following…" : "Follow"}
+                  </Button>
                 )}
                 <IconButton onClick={(e) => setMenuAnchor(e.currentTarget)}>
                   <MoreVertIcon />
@@ -798,7 +778,7 @@ export const Notes: React.FC<NotesProps> = ({
           <Button
             onClick={() => {
               if (pendingFollowKey) {
-                updateContactList(null, pendingFollowKey);
+                followPubkey(pendingFollowKey, { allowEmptyContactList: true });
               }
               setShowContactListWarning(false);
               setPendingFollowKey(null);

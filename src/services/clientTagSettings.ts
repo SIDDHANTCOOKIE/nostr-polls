@@ -9,11 +9,12 @@ export const DEFAULT_CLIENT_TAG_NAME = "Pollerama";
 // than a dedicated setting; the rest are for fun. Users can also type their own.
 export const CLIENT_TAG_PRESETS = [
   "Pollerama",
-  "The best client in the world",
-  "Nostr's finest",
-  "Powered by vibes",
-  "Definitely not a bot",
-  "Sent from my zap",
+  "client tags are dumb",
+  "from yo mama's house",
+  "posted from the toilet",
+  "your honor i was hacked",
+  "touch grass? never heard of it",
+  "this could've been a DM",
 ];
 
 export const isClientTagEnabled = (): boolean => {

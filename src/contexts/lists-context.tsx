@@ -109,7 +109,18 @@ interface ListContextInterface {
   selectedList: string | undefined;
   handleListSelected: (id: string | null) => void;
   fetchLatestContactList(): Promise<Event | null>;
+  // Follow a pubkey: builds/signs/publishes the updated kind-3 AND commits it to
+  // the durable contacts cache + in-memory follows (the step ad-hoc call sites
+  // skipped, which left the list stale on the next launch). Resolves to
+  // "no-contact-list" when the user has no existing contact list and
+  // `allowEmptyContactList` wasn't set, so the caller can confirm first.
+  followPubkey(
+    pubkeyToAdd: string,
+    opts?: { allowEmptyContactList?: boolean },
+  ): Promise<"ok" | "no-contact-list">;
   unfollowContact(pubkeyToRemove: string): Promise<void>;
+  // Pubkeys with an in-flight follow/unfollow, for optimistic UI indicators.
+  pendingFollows: Set<string>;
   myTopics: Set<string> | undefined;
   addTopicToMyTopics: (topic: string) => Promise<void>;
   removeTopicFromMyTopics: (topic: string) => Promise<void>;
@@ -141,6 +152,7 @@ export function ListProvider({ children }: { children: ReactNode }) {
   const [lists, setLists] = useState<Map<string, Event> | undefined>();
   const [selectedList, setSelectedList] = useState<string | undefined>();
   const [bookmarkedPackKeys, setBookmarkedPackKeys] = useState<Set<string>>(new Set());
+  const [pendingFollows, setPendingFollows] = useState<Set<string>>(new Set());
   const [bookmarks10003, setBookmarks10003] = useState<Event | null>(null);
   const [myTopics, setMyTopics] = useState<Set<string> | undefined>();
   const [myTopicsEvent, setMyTopicsEvent] = useState<
@@ -804,24 +816,93 @@ export function ListProvider({ children }: { children: ReactNode }) {
     fetchMyTopics();
   };
 
+  const addPendingFollow = (pk: string) =>
+    setPendingFollows((s) => new Set(s).add(pk));
+  const removePendingFollow = (pk: string) =>
+    setPendingFollows((s) => {
+      const next = new Set(s);
+      next.delete(pk);
+      return next;
+    });
+
+  // Strictly newer than both wall-clock and the fetched list, so a same-second
+  // second follow can't tie the newness gate and get dropped.
+  const nextContactListTimestamp = (contactEvent: Event | null) =>
+    Math.max(
+      Math.floor(Date.now() / 1000),
+      (contactEvent?.created_at ?? 0) + 1,
+    );
+
+  const followPubkey = async (
+    pubkeyToAdd: string,
+    opts?: { allowEmptyContactList?: boolean },
+  ): Promise<"ok" | "no-contact-list"> => {
+    if (!user) {
+      requestLogin();
+      return "ok";
+    }
+
+    // Never risk publishing a single-follow kind-3 that clobbers a real list we
+    // just failed to fetch in time: every feed is powered by the contact list, so
+    // a lost list means dead feeds at next startup. Fall back to the durable cache
+    // before treating this as a genuinely empty list.
+    const contactEvent =
+      (await fetchLatestContactList()) ??
+      readCachedContacts(user.pubkey)?.event ??
+      null;
+    if (!contactEvent && !opts?.allowEmptyContactList) {
+      return "no-contact-list";
+    }
+
+    const existingTags = contactEvent?.tags || [];
+    const pTags = existingTags.filter(([t]) => t === "p").map(([, pk]) => pk);
+    if (pTags.includes(pubkeyToAdd)) return "ok";
+
+    addPendingFollow(pubkeyToAdd);
+    try {
+      const newEvent: EventTemplate = {
+        kind: 3,
+        created_at: nextContactListTimestamp(contactEvent),
+        tags: [...existingTags, ["p", pubkeyToAdd]],
+        content: contactEvent?.content || "",
+      };
+      const signer = await signerManager.getSigner();
+      const signed = await signer.signEvent(newEvent);
+      await dataLayer.publishEvent(signed);
+      // Commit to the durable localStorage cache + in-memory follows + lists map
+      // via the same path a network-received list takes. This is what the ad-hoc
+      // write sites skipped, leaving the cache stale on the next launch.
+      await handleContactListEvent(signed);
+    } finally {
+      removePendingFollow(pubkeyToAdd);
+    }
+    return "ok";
+  };
+
   const unfollowContact = async (pubkeyToRemove: string): Promise<void> => {
     if (!user) return;
-    const contactEvent = await fetchLatestContactList();
-    const existingTags = contactEvent?.tags || [];
-    const updatedTags = existingTags.filter(([t, pk]) => !(t === "p" && pk === pubkeyToRemove));
-    const newEvent: EventTemplate = {
-      kind: 3,
-      created_at: Math.floor(Date.now() / 1000),
-      tags: updatedTags,
-      content: contactEvent?.content || "",
-    };
-    const signer = await signerManager.getSigner();
-    const signed = await signer.signEvent(newEvent);
-    await dataLayer.publishEvent(signed);
-    setUser((prev) => {
-      if (!prev) return null;
-      return { ...prev, follows: (prev.follows || []).filter(pk => pk !== pubkeyToRemove) };
-    });
+    addPendingFollow(pubkeyToRemove);
+    try {
+      const contactEvent = await fetchLatestContactList();
+      const existingTags = contactEvent?.tags || [];
+      const updatedTags = existingTags.filter(
+        ([t, pk]) => !(t === "p" && pk === pubkeyToRemove),
+      );
+      const newEvent: EventTemplate = {
+        kind: 3,
+        created_at: nextContactListTimestamp(contactEvent),
+        tags: updatedTags,
+        content: contactEvent?.content || "",
+      };
+      const signer = await signerManager.getSigner();
+      const signed = await signer.signEvent(newEvent);
+      await dataLayer.publishEvent(signed);
+      // Same durable commit as follow — without this the removal never reaches
+      // the localStorage cache and reappears on next launch.
+      await handleContactListEvent(signed);
+    } finally {
+      removePendingFollow(pubkeyToRemove);
+    }
   };
 
   return (
@@ -831,7 +912,9 @@ export function ListProvider({ children }: { children: ReactNode }) {
         selectedList,
         handleListSelected,
         fetchLatestContactList,
+        followPubkey,
         unfollowContact,
+        pendingFollows,
         myTopics,
         addTopicToMyTopics,
         removeTopicFromMyTopics,

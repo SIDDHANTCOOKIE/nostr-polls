@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { Event, Filter } from "nostr-tools";
-import { Box, Typography } from "@mui/material";
+import { Box, Typography, Tabs, Tab } from "@mui/material";
 import { dataLayer } from "@formstr/local-relay";
 import { Notes } from "../Notes";
 import UnifiedFeed from "../Feed/UnifiedFeed";
@@ -13,9 +13,16 @@ interface UserNotesFeedProps {
 
 const KIND_NOTE = 1;
 
+// A note is a "conversation" (reply) if it references another event with an
+// `e` tag. Quotes use a `q` tag (NIP-18), so those stay "posts"; we also skip
+// legacy quote-style `e` tags marked "mention". Everything else is a "post".
+const isReply = (event: Event): boolean =>
+  event.tags.some((t) => t[0] === "e" && t[3] !== "mention");
+
 const UserNotesFeed: React.FC<UserNotesFeedProps> = ({ pubkey, scrollContainerRef }) => {
   const [notes, setNotes] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
+  const [subTab, setSubTab] = useState(0);
 
   const fetchNotes = useCallback(() => {
     if (!pubkey) return;
@@ -50,24 +57,43 @@ const UserNotesFeed: React.FC<UserNotesFeedProps> = ({ pubkey, scrollContainerRe
     return cleanup;
   }, [fetchNotes]);
 
+  const posts = useMemo(() => notes.filter((n) => !isReply(n)), [notes]);
+  const conversations = useMemo(() => notes.filter(isReply), [notes]);
+
+  const data = subTab === 0 ? posts : conversations;
+
   return (
-    <UnifiedFeed
-      data={notes}
-      loading={loading}
-      customScrollParent={scrollContainerRef?.current ?? undefined}
-      emptyState={
-        <Box sx={{ p: 3, textAlign: "center" }}>
-          <Typography variant="body1" color="text.secondary">
-            No notes yet
-          </Typography>
-        </Box>
-      }
-      itemContent={(index, note) => (
-        <Box key={note.id} sx={{ mb: 2 }}>
-          <Notes event={note} />
-        </Box>
-      )}
-    />
+    <Box>
+      <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 2 }}>
+        <Tabs
+          value={subTab}
+          onChange={(_, v) => setSubTab(v)}
+          aria-label="notes sub tabs"
+          variant="fullWidth"
+        >
+          <Tab label="Posts" />
+          <Tab label="Conversations" />
+        </Tabs>
+      </Box>
+
+      <UnifiedFeed
+        data={data}
+        loading={loading}
+        customScrollParent={scrollContainerRef?.current ?? undefined}
+        emptyState={
+          <Box sx={{ p: 3, textAlign: "center" }}>
+            <Typography variant="body1" color="text.secondary">
+              {subTab === 0 ? "No posts yet" : "No conversations yet"}
+            </Typography>
+          </Box>
+        }
+        itemContent={(index, note) => (
+          <Box key={note.id} sx={{ mb: 2 }}>
+            <Notes event={note} />
+          </Box>
+        )}
+      />
+    </Box>
   );
 };
 
