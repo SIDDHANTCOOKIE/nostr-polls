@@ -167,6 +167,10 @@ const ProfilePage: React.FC = () => {
       try {
         setLoading(true);
         setError(null);
+        // Clear the previous profile so fields the new profile doesn't set
+        // (e.g. banner, website) don't visually carry over while/if the new
+        // one loads or fails to fetch.
+        setProfile(null);
 
         // Decode npub or nprofile to get pubkey
         const decoded = nip19.decode(npubOrNprofile);
