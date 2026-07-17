@@ -92,9 +92,14 @@ export const LoginModal: React.FC<Props> = ({ open, onClose }) => {
   useBackClose(open, onClose);
 
   useEffect(() => {
+    if (!isAndroidNative()) return;
     const initialize = async () => {
-      const result = await NostrSignerPlugin.getInstalledSignerApps();
-      setInstalledSigners(result.apps);
+      try {
+        const result = await NostrSignerPlugin.getInstalledSignerApps();
+        setInstalledSigners(result.apps);
+      } catch (err) {
+        console.error("Failed to list installed NIP-55 signer apps:", err);
+      }
     };
     initialize();
   }, []);

@@ -62,6 +62,10 @@ import ArticlesFeed from "./components/Feed/ArticlesFeed";
 import MusicFeed from "./components/Feed/MusicFeed";
 import PlaylistDetail from "./components/Music/PlaylistDetail";
 import SharedPlaylistDetail from "./components/Music/SharedPlaylistDetail";
+import GamesFeed from "./components/Games/GamesFeed";
+import Twenty48Board from "./games/twenty48/Board";
+import TetrisBoard from "./games/tetris/Board";
+import RacerBoard from "./games/racer/Board";
 import { PlaybackProvider } from "./contexts/PlaybackContext";
 import { PlaylistsProvider } from "./contexts/playlists-context";
 import { DraftsProvider } from "./contexts/drafts-context";
@@ -244,6 +248,10 @@ function AppContent() {
             <Route path="music" element={<MusicFeed />} />
             <Route path="music/shared/:naddr" element={<SharedPlaylistDetail />} />
             <Route path="music/:playlistId" element={<PlaylistDetail />} />
+            <Route path="games" element={<GamesFeed />} />
+            <Route path="games/2048" element={<Twenty48Board />} />
+            <Route path="games/tetris" element={<TetrisBoard />} />
+            <Route path="games/racer" element={<RacerBoard />} />
 
             <Route element={<Outlet />}>
               <Route path="movies" element={<MoviesFeed />} />
