@@ -1,4 +1,5 @@
 import { TextDecoder, TextEncoder } from "util";
+import "@testing-library/jest-dom";
 
 Object.assign(globalThis, { TextDecoder, TextEncoder });
 
@@ -14,5 +15,3 @@ window.matchMedia = function matchMedia(query: string): MediaQueryList {
     dispatchEvent: () => false,
   } as MediaQueryList;
 };
-
-import "@testing-library/jest-dom";

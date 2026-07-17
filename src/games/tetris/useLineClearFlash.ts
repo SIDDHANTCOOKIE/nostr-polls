@@ -10,6 +10,9 @@ export function useLineClearFlash(engine: TetrisEngine | null | undefined): bool
   const prevRef = useRef(0);
   const [flashing, setFlashing] = useState(false);
 
+  // engine is a stable ref mutated in place each tick, so this must run on
+  // every render (no deps array) to catch line clears as they happen.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const total = engine?.getTotalLinesCleared() ?? 0;
     if (total > prevRef.current) {
