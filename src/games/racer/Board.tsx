@@ -2,8 +2,9 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Button, IconButton, Stack, Typography } from "@mui/material";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import { useUserContext } from "../../hooks/useUserContext";
-import { FIXED_STEP_MS, GameInput } from "../core/types";
+import { GameInput } from "../core/types";
 import { InputRecorder } from "../core/inputRecorder";
+import { TickSync } from "../core/tickSync";
 import {
   StoredScore,
   getDailySeed,
@@ -29,8 +30,10 @@ export default function RacerBoard() {
 
   const engineRef = useRef<RacerEngine | null>(null);
   const recorderRef = useRef<InputRecorder | null>(null);
+  const tickSyncRef = useRef<TickSync<RacerAction> | null>(null);
   if (!engineRef.current) engineRef.current = new RacerEngine();
   if (!recorderRef.current) recorderRef.current = new InputRecorder();
+  if (!tickSyncRef.current) tickSyncRef.current = new TickSync();
 
   const [playerX, setPlayerX] = useState(0);
   const [steerDir, setSteerDir] = useState(0);
@@ -61,6 +64,7 @@ export default function RacerBoard() {
   const resetGame = useCallback(() => {
     engineRef.current!.init(seed);
     recorderRef.current!.reset();
+    tickSyncRef.current = new TickSync();
     setGameOver(false);
     setPublishedThisRun(false);
     setWatchingReplay(false);
@@ -83,26 +87,18 @@ export default function RacerBoard() {
     };
   }, [user?.pubkey, dateIso]);
 
-  // Fixed-timestep simulation loop — same pattern as Tetris's gravity, but
-  // this game changes visibly every frame (continuous motion) so there's no
-  // version-gating: every rAF frame re-renders.
+  // Simulation loop — same pattern as Tetris's gravity: ticks are driven
+  // through TickSync so live play and replay always agree (see TickSync's
+  // doc comment). This game changes visibly every frame (continuous motion)
+  // so there's no version-gating: every rAF frame re-renders.
   useEffect(() => {
     let raf = 0;
-    let last = performance.now();
-    let accumulator = 0;
 
-    const loop = (now: number) => {
+    const loop = () => {
       const engine = engineRef.current!;
       if (!engine.isGameOver()) {
-        accumulator += now - last;
-        last = now;
-        while (accumulator >= FIXED_STEP_MS) {
-          engine.tick(FIXED_STEP_MS);
-          accumulator -= FIXED_STEP_MS;
-        }
+        tickSyncRef.current!.catchUpTo(engine, recorderRef.current!.elapsedNow());
         syncFromEngine();
-      } else {
-        last = now;
       }
       raf = requestAnimationFrame(loop);
     };
@@ -115,7 +111,9 @@ export default function RacerBoard() {
     if (engine.isGameOver()) return;
     recorderRef.current!.record(action);
     const log = recorderRef.current!.getLog();
-    engine.applyInput(action, log[log.length - 1].t);
+    const t = log[log.length - 1].t;
+    tickSyncRef.current!.catchUpTo(engine, t);
+    engine.applyInput(action, t);
   }, []);
 
   // Keyboard: press-and-hold steers continuously; a ref tracks which keys
@@ -187,7 +185,7 @@ export default function RacerBoard() {
   }, [gameOver, score, bestToday, publishedThisRun, user?.pubkey, dateIso, seed]);
 
   return (
-    <Stack alignItems="center" spacing={2} sx={{ p: 2 }}>
+    <Stack alignItems="center" spacing={2} sx={{ p: 2, height: "100%", overflowY: "auto" }}>
       <Stack direction="row" spacing={1} alignItems="center">
         <Typography variant="h5">Overdrive — {dateIso}</Typography>
         <IconButton size="small" onClick={() => setLeaderboardOpen(true)} aria-label="Leaderboard">

@@ -53,9 +53,13 @@
   "jest": {
     "moduleNameMapper": {
       "^nostr-tools/nip46$": "<rootDir>/node_modules/nostr-tools/lib/cjs/nip46.js",
+      "^nostr-tools/nip49$": "<rootDir>/node_modules/nostr-tools/lib/cjs/nip49.js",
       "^@mui/material/styles/useTheme$": "<rootDir>/node_modules/@mui/material/node/styles/useTheme.js",
       "^react-router/dist$": "<rootDir>/node_modules/react-router/dist/main.js"
-    }
+    },
+    "transformIgnorePatterns": [
+      "node_modules/(?!(@noble|@scure)/)"
+    ]
   },
   "eslintConfig": {
     "extends": [

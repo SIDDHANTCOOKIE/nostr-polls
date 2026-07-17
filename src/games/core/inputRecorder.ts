@@ -21,4 +21,10 @@ export class InputRecorder {
   getLog(): GameInput[] {
     return this.log;
   }
+
+  /** Elapsed ms since session start, on the same clock `record` timestamps
+   *  use — so a live tick loop can advance in lockstep with recorded inputs. */
+  elapsedNow(): number {
+    return performance.now() - this.startedAt;
+  }
 }

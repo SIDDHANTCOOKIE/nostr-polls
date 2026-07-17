@@ -2,8 +2,9 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Button, IconButton, Stack, Typography } from "@mui/material";
 import EmojiEventsIcon from "@mui/icons-material/EmojiEvents";
 import { useUserContext } from "../../hooks/useUserContext";
-import { FIXED_STEP_MS, GameInput } from "../core/types";
+import { GameInput } from "../core/types";
 import { InputRecorder } from "../core/inputRecorder";
+import { TickSync } from "../core/tickSync";
 import {
   StoredScore,
   getDailySeed,
@@ -38,8 +39,10 @@ export default function TetrisBoard() {
 
   const engineRef = useRef<TetrisEngine | null>(null);
   const recorderRef = useRef<InputRecorder | null>(null);
+  const tickSyncRef = useRef<TickSync<TetrisAction> | null>(null);
   if (!engineRef.current) engineRef.current = new TetrisEngine();
   if (!recorderRef.current) recorderRef.current = new InputRecorder();
+  if (!tickSyncRef.current) tickSyncRef.current = new TickSync();
 
   const [board, setBoard] = useState<(string | 0)[][]>([]);
   const [nextPiece, setNextPiece] = useState<PieceType | null>(null);
@@ -69,6 +72,7 @@ export default function TetrisBoard() {
   const resetGame = useCallback(() => {
     engineRef.current!.init(seed);
     recorderRef.current!.reset();
+    tickSyncRef.current = new TickSync();
     setGameOver(false);
     setPublishedThisRun(false);
     setWatchingReplay(false);
@@ -91,32 +95,25 @@ export default function TetrisBoard() {
     };
   }, [user?.pubkey, dateIso]);
 
-  // Fixed-timestep gravity loop: real rAF delta is accumulated and stepped in
-  // exact FIXED_STEP_MS increments so this reproduces identically under
-  // replay (see FIXED_STEP_MS doc comment) regardless of actual frame rate.
-  // A version counter gates re-renders so idle frames (most of them, since
-  // gravity only moves the piece every ~800ms) don't trigger React work.
+  // Gravity loop: ticks are driven through TickSync, which advances the
+  // engine to exactly floor(elapsed / FIXED_STEP_MS) ticks — the same rule
+  // verifyReplay uses — rather than an ad-hoc rAF-delta accumulator, so live
+  // play and replay always agree regardless of actual frame rate (see
+  // TickSync's doc comment). A version counter gates re-renders so idle
+  // frames (most of them, since gravity only moves the piece every ~800ms)
+  // don't trigger React work.
   useEffect(() => {
     let raf = 0;
-    let last = performance.now();
-    let accumulator = 0;
     let lastVersion = -1;
 
-    const loop = (now: number) => {
+    const loop = () => {
       const engine = engineRef.current!;
       if (!engine.isGameOver()) {
-        accumulator += now - last;
-        last = now;
-        while (accumulator >= FIXED_STEP_MS) {
-          engine.tick(FIXED_STEP_MS);
-          accumulator -= FIXED_STEP_MS;
-        }
+        tickSyncRef.current!.catchUpTo(engine, recorderRef.current!.elapsedNow());
         if (engine.getVersion() !== lastVersion) {
           lastVersion = engine.getVersion();
           syncFromEngine();
         }
-      } else {
-        last = now;
       }
       raf = requestAnimationFrame(loop);
     };
@@ -130,7 +127,9 @@ export default function TetrisBoard() {
       if (engine.isGameOver()) return;
       recorderRef.current!.record(action);
       const log = recorderRef.current!.getLog();
-      engine.applyInput(action, log[log.length - 1].t);
+      const t = log[log.length - 1].t;
+      tickSyncRef.current!.catchUpTo(engine, t);
+      engine.applyInput(action, t);
       syncFromEngine();
     },
     [syncFromEngine]
@@ -165,7 +164,7 @@ export default function TetrisBoard() {
   }, [gameOver, score, bestToday, publishedThisRun, user?.pubkey, dateIso, seed]);
 
   return (
-    <Stack alignItems="center" spacing={2} sx={{ p: 2 }}>
+    <Stack alignItems="center" spacing={2} sx={{ p: 2, height: "100%", overflowY: "auto" }}>
       <Stack direction="row" spacing={1} alignItems="center">
         <Typography variant="h5">Tetris — {dateIso}</Typography>
         <IconButton size="small" onClick={() => setLeaderboardOpen(true)} aria-label="Leaderboard">

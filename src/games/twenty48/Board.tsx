@@ -138,7 +138,7 @@ export default function Twenty48Board() {
   }, [gameOver, score, bestToday, publishedThisRun, user?.pubkey, dateIso, seed]);
 
   return (
-    <Stack alignItems="center" spacing={2} sx={{ p: 2 }}>
+    <Stack alignItems="center" spacing={2} sx={{ p: 2, height: "100%", overflowY: "auto" }}>
       <Stack direction="row" spacing={1} alignItems="center">
         <Typography variant="h5">2048 — {dateIso}</Typography>
         <IconButton size="small" onClick={() => setLeaderboardOpen(true)} aria-label="Leaderboard">
