@@ -18,6 +18,7 @@ import TetrisGrid from "./Grid";
 import TetrisReplay from "./Replay";
 import NextPiece from "./NextPiece";
 import GameLeaderboardModal from "../../components/Games/GameLeaderboardModal";
+import ShareScoreButton from "../../components/Games/ShareScoreButton";
 import { useLineClearFlash } from "./useLineClearFlash";
 
 const GAME_ID = "tetris";
@@ -31,6 +32,10 @@ const KEY_TO_ACTION: Record<string, TetrisAction> = {
   ArrowDown: "soft_drop",
   " ": "hard_drop",
 };
+
+const SWIPE_THRESHOLD_PX = 24;
+const TAP_MAX_MOVE_PX = 10;
+const TAP_MAX_DURATION_MS = 250;
 
 export default function TetrisBoard() {
   const { user } = useUserContext();
@@ -146,6 +151,29 @@ export default function TetrisBoard() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [doMove]);
 
+  const touchStart = useRef<{ x: number; y: number; t: number } | null>(null);
+  const onTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    touchStart.current = { x: t.clientX, y: t.clientY, t: Date.now() };
+  };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStart.current) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touchStart.current.x;
+    const dy = t.clientY - touchStart.current.y;
+    const duration = Date.now() - touchStart.current.t;
+    touchStart.current = null;
+
+    const distance = Math.max(Math.abs(dx), Math.abs(dy));
+    if (distance < TAP_MAX_MOVE_PX && duration < TAP_MAX_DURATION_MS) {
+      doMove("rotate_cw");
+      return;
+    }
+    if (distance < SWIPE_THRESHOLD_PX) return;
+    if (Math.abs(dx) > Math.abs(dy)) doMove(dx > 0 ? "move_right" : "move_left");
+    else if (dy > 0) doMove("soft_drop");
+  };
+
   useEffect(() => {
     if (!gameOver || publishedThisRun || publishingRef.current) return;
     if (!user?.pubkey) return;
@@ -190,30 +218,28 @@ export default function TetrisBoard() {
         <TetrisReplay seed={seed} inputLog={finishedLog} />
       ) : (
         <>
-          <Stack direction="row" spacing={2} alignItems="flex-start">
+          <Stack
+            direction="row"
+            spacing={2}
+            alignItems="flex-start"
+            onTouchStart={onTouchStart}
+            onTouchEnd={onTouchEnd}
+            sx={{ touchAction: "none" }}
+          >
             <TetrisGrid board={board} flash={flashing} />
             <NextPiece type={nextPiece} />
           </Stack>
-          <Stack direction="row" spacing={1} flexWrap="wrap" justifyContent="center">
-            <Button size="small" variant="outlined" onClick={() => doMove("move_left")}>
-              ←
-            </Button>
+          <Stack direction="row" spacing={1} justifyContent="center">
             <Button size="small" variant="outlined" onClick={() => doMove("rotate_ccw")}>
               ⟲
-            </Button>
-            <Button size="small" variant="outlined" onClick={() => doMove("rotate_cw")}>
-              ⟳
-            </Button>
-            <Button size="small" variant="outlined" onClick={() => doMove("move_right")}>
-              →
-            </Button>
-            <Button size="small" variant="outlined" onClick={() => doMove("soft_drop")}>
-              ↓
             </Button>
             <Button size="small" variant="contained" onClick={() => doMove("hard_drop")}>
               Drop
             </Button>
           </Stack>
+          <Typography variant="caption" color="text.secondary">
+            Swipe to move/drop, tap to rotate — or arrow keys, Z, Space on desktop
+          </Typography>
         </>
       )}
 
@@ -233,6 +259,7 @@ export default function TetrisBoard() {
         <Button variant="outlined" onClick={resetGame}>
           Restart today's board
         </Button>
+        {gameOver && <ShareScoreButton gameLabel="Tetris" gameId={GAME_ID} score={score} dateIso={dateIso} />}
       </Stack>
 
       <GameLeaderboardModal

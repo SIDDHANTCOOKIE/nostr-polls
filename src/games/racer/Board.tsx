@@ -17,6 +17,7 @@ import { RacerAction, RacerEngine } from "./engine";
 import Track, { TrackObstacle } from "./Track";
 import RacerReplay from "./Replay";
 import GameLeaderboardModal from "../../components/Games/GameLeaderboardModal";
+import ShareScoreButton from "../../components/Games/ShareScoreButton";
 
 const GAME_ID = "racer";
 const racerFactory = () => new RacerEngine();
@@ -246,6 +247,7 @@ export default function RacerBoard() {
         <Button variant="outlined" onClick={resetGame}>
           Restart today's run
         </Button>
+        {gameOver && <ShareScoreButton gameLabel="Overdrive" gameId={GAME_ID} score={score} dateIso={dateIso} />}
       </Stack>
 
       <GameLeaderboardModal

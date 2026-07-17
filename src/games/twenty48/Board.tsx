@@ -16,6 +16,7 @@ import Twenty48Grid from "./Grid";
 import Twenty48Replay from "./Replay";
 import { GameInput } from "../core/types";
 import GameLeaderboardModal from "../../components/Games/GameLeaderboardModal";
+import ShareScoreButton from "../../components/Games/ShareScoreButton";
 
 const twenty48Factory = () => new Twenty48Engine();
 
@@ -181,6 +182,7 @@ export default function Twenty48Board() {
         <Button variant="outlined" onClick={resetGame}>
           Restart today's board
         </Button>
+        {gameOver && <ShareScoreButton gameLabel="2048" gameId={GAME_ID} score={score} dateIso={dateIso} />}
       </Stack>
 
       <GameLeaderboardModal
