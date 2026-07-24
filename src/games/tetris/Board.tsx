@@ -54,6 +54,8 @@ export default function TetrisBoard() {
   const [level, setLevel] = useState(0);
   const [score, setScore] = useState(0);
   const [gameOver, setGameOver] = useState(false);
+  const [paused, setPaused] = useState(false);
+  const pausedRef = useRef(false);
   const [bestToday, setBestToday] = useState<StoredScore | null>(null);
   const [publishedThisRun, setPublishedThisRun] = useState(false);
   const [watchingReplay, setWatchingReplay] = useState(false);
@@ -78,6 +80,8 @@ export default function TetrisBoard() {
     engineRef.current!.init(seed);
     recorderRef.current!.reset();
     tickSyncRef.current = new TickSync();
+    pausedRef.current = false;
+    setPaused(false);
     setGameOver(false);
     setPublishedThisRun(false);
     setWatchingReplay(false);
@@ -129,7 +133,7 @@ export default function TetrisBoard() {
   const doMove = useCallback(
     (action: TetrisAction) => {
       const engine = engineRef.current!;
-      if (engine.isGameOver()) return;
+      if (engine.isGameOver() || pausedRef.current) return;
       recorderRef.current!.record(action);
       const log = recorderRef.current!.getLog();
       const t = log[log.length - 1].t;
@@ -140,8 +144,23 @@ export default function TetrisBoard() {
     [syncFromEngine]
   );
 
+  const togglePause = useCallback(() => {
+    if (engineRef.current!.isGameOver()) return;
+    const next = !pausedRef.current;
+    pausedRef.current = next;
+    if (next) recorderRef.current!.pause();
+    else recorderRef.current!.resume();
+    setPaused(next);
+  }, []);
+
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "p" || e.key === "P") {
+        e.preventDefault();
+        togglePause();
+        return;
+      }
+      if (pausedRef.current) return;
       const action = KEY_TO_ACTION[e.key];
       if (!action) return;
       e.preventDefault();
@@ -149,7 +168,7 @@ export default function TetrisBoard() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [doMove]);
+  }, [doMove, togglePause]);
 
   const touchStart = useRef<{ x: number; y: number; t: number } | null>(null);
   const onTouchStart = (e: React.TouchEvent) => {
@@ -230,15 +249,23 @@ export default function TetrisBoard() {
             <NextPiece type={nextPiece} />
           </Stack>
           <Stack direction="row" spacing={1} justifyContent="center">
-            <Button size="small" variant="outlined" onClick={() => doMove("rotate_ccw")}>
+            <Button size="small" variant="outlined" onClick={() => doMove("rotate_ccw")} disabled={paused}>
               ⟲
             </Button>
-            <Button size="small" variant="contained" onClick={() => doMove("hard_drop")}>
+            <Button size="small" variant="contained" onClick={() => doMove("hard_drop")} disabled={paused}>
               Drop
             </Button>
+            <Button size="small" variant="outlined" onClick={togglePause}>
+              {paused ? "Resume" : "Pause"}
+            </Button>
           </Stack>
+          {paused && (
+            <Typography color="warning.main" fontWeight={600}>
+              Paused
+            </Typography>
+          )}
           <Typography variant="caption" color="text.secondary">
-            Swipe to move/drop, tap to rotate — or arrow keys, Z, Space on desktop
+            Swipe to move/drop, tap to rotate — or arrow keys, Z, Space; P to pause
           </Typography>
         </>
       )}

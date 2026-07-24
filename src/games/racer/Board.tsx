@@ -42,6 +42,8 @@ export default function RacerBoard() {
   const [distance, setDistance] = useState(0);
   const [score, setScore] = useState(0);
   const [gameOver, setGameOver] = useState(false);
+  const [paused, setPaused] = useState(false);
+  const pausedRef = useRef(false);
   const [bestToday, setBestToday] = useState<StoredScore | null>(null);
   const [publishedThisRun, setPublishedThisRun] = useState(false);
   const [watchingReplay, setWatchingReplay] = useState(false);
@@ -66,6 +68,8 @@ export default function RacerBoard() {
     engineRef.current!.init(seed);
     recorderRef.current!.reset();
     tickSyncRef.current = new TickSync();
+    pausedRef.current = false;
+    setPaused(false);
     setGameOver(false);
     setPublishedThisRun(false);
     setWatchingReplay(false);
@@ -109,7 +113,7 @@ export default function RacerBoard() {
 
   const sendAction = useCallback((action: RacerAction) => {
     const engine = engineRef.current!;
-    if (engine.isGameOver()) return;
+    if (engine.isGameOver() || pausedRef.current) return;
     recorderRef.current!.record(action);
     const log = recorderRef.current!.getLog();
     const t = log[log.length - 1].t;
@@ -117,21 +121,51 @@ export default function RacerBoard() {
     engine.applyInput(action, t);
   }, []);
 
+  // Pause freezes the recorder clock so motion halts. Because steering is
+  // press-and-hold, we release any active steer *before* freezing (so a key
+  // released during the pause can't leave the car drifting on resume) and
+  // re-apply whatever is still physically held on resume. heldKeysRef keeps
+  // tracking physical key state even while paused (see onKeyDown/onKeyUp).
+  const togglePause = useCallback(() => {
+    if (engineRef.current!.isGameOver()) return;
+    const next = !pausedRef.current;
+    if (next) {
+      if (heldKeysRef.current.has("ArrowLeft")) sendAction("left_up");
+      if (heldKeysRef.current.has("ArrowRight")) sendAction("right_up");
+      recorderRef.current!.pause();
+      pausedRef.current = true;
+    } else {
+      pausedRef.current = false;
+      recorderRef.current!.resume();
+      if (heldKeysRef.current.has("ArrowLeft")) sendAction("left_down");
+      if (heldKeysRef.current.has("ArrowRight")) sendAction("right_down");
+    }
+    setPaused(next);
+  }, [sendAction]);
+
   // Keyboard: press-and-hold steers continuously; a ref tracks which keys
   // are currently down so OS key-repeat doesn't spam extra down events.
   const heldKeysRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "p" || e.key === "P") {
+        e.preventDefault();
+        togglePause();
+        return;
+      }
       if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
       e.preventDefault();
       if (heldKeysRef.current.has(e.key)) return;
       heldKeysRef.current.add(e.key);
+      // Track the physical key even while paused, but don't steer until resume.
+      if (pausedRef.current) return;
       sendAction(e.key === "ArrowLeft" ? "left_down" : "right_down");
     };
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
       if (!heldKeysRef.current.has(e.key)) return;
       heldKeysRef.current.delete(e.key);
+      if (pausedRef.current) return;
       sendAction(e.key === "ArrowLeft" ? "left_up" : "right_up");
     };
     window.addEventListener("keydown", onKeyDown);
@@ -140,7 +174,7 @@ export default function RacerBoard() {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, [sendAction]);
+  }, [sendAction, togglePause]);
 
   // Touch: drag left/right of the starting touch point to steer, like an
   // analogue stick — only fires down/up transitions when the held direction
@@ -225,8 +259,16 @@ export default function RacerBoard() {
             crashed={gameOver}
             steerDir={steerDir}
           />
+          <Button size="small" variant="outlined" onClick={togglePause}>
+            {paused ? "Resume" : "Pause"}
+          </Button>
+          {paused && (
+            <Typography color="warning.main" fontWeight={600}>
+              Paused
+            </Typography>
+          )}
           <Typography variant="caption" color="text.secondary">
-            Arrow keys to steer (hold) — or drag left/right on the road
+            Arrow keys to steer (hold) — or drag left/right on the road; P to pause
           </Typography>
         </Stack>
       )}

@@ -44,6 +44,8 @@ export default function Twenty48Board() {
   const [tiles, setTiles] = useState<Tile[]>([]);
   const [score, setScore] = useState(0);
   const [gameOver, setGameOver] = useState(false);
+  const [paused, setPaused] = useState(false);
+  const pausedRef = useRef(false);
   const [bestToday, setBestToday] = useState<StoredScore | null>(null);
   const [publishedThisRun, setPublishedThisRun] = useState(false);
   const [watchingReplay, setWatchingReplay] = useState(false);
@@ -56,6 +58,8 @@ export default function Twenty48Board() {
     recorderRef.current!.reset();
     setTiles(engineRef.current!.getTiles());
     setScore(0);
+    pausedRef.current = false;
+    setPaused(false);
     setGameOver(false);
     setPublishedThisRun(false);
     setWatchingReplay(false);
@@ -79,7 +83,7 @@ export default function Twenty48Board() {
 
   const doMove = useCallback((action: Twenty48Action) => {
     const engine = engineRef.current!;
-    if (engine.isGameOver()) return;
+    if (engine.isGameOver() || pausedRef.current) return;
     recorderRef.current!.record(action);
     const log = recorderRef.current!.getLog();
     engine.applyInput(action, log[log.length - 1].t);
@@ -91,8 +95,23 @@ export default function Twenty48Board() {
     }
   }, []);
 
+  const togglePause = useCallback(() => {
+    if (engineRef.current!.isGameOver()) return;
+    const next = !pausedRef.current;
+    pausedRef.current = next;
+    if (next) recorderRef.current!.pause();
+    else recorderRef.current!.resume();
+    setPaused(next);
+  }, []);
+
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "p" || e.key === "P") {
+        e.preventDefault();
+        togglePause();
+        return;
+      }
+      if (pausedRef.current) return;
       const action = KEY_TO_ACTION[e.key];
       if (!action) return;
       e.preventDefault();
@@ -100,7 +119,7 @@ export default function Twenty48Board() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [doMove]);
+  }, [doMove, togglePause]);
 
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const onTouchStart = (e: React.TouchEvent) => {
@@ -163,7 +182,17 @@ export default function Twenty48Board() {
       {watchingReplay && finishedLog ? (
         <Twenty48Replay seed={seed} inputLog={finishedLog} />
       ) : (
-        <Twenty48Grid tiles={tiles} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} />
+        <>
+          <Twenty48Grid tiles={tiles} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} />
+          <Button size="small" variant="outlined" onClick={togglePause}>
+            {paused ? "Resume" : "Pause"}
+          </Button>
+          {paused && (
+            <Typography color="warning.main" fontWeight={600}>
+              Paused
+            </Typography>
+          )}
+        </>
       )}
 
       {gameOver && (
