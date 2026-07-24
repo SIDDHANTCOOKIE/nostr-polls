@@ -109,8 +109,8 @@ export function useEvents({ kinds, scope, includeNonRoots }: UseEventsOptions): 
   const pendingRef = React.useRef(new Map<string, Event>());
   const eosedRef = React.useRef(false);
   const topRef = React.useRef(0); // created_at of the newest currently-displayed item
+  const oldestRef = React.useRef(0); // created_at of the oldest currently-displayed item (pagination cursor)
   const handleRef = React.useRef<ObserveHandle | null>(null);
-  const limitRef = React.useRef(PAGE); // current window size (grows on loadOlder)
 
   // Stable key so the effect re-runs only on a real scope/kinds change.
   const kindsKey = kinds.join(",");
@@ -127,6 +127,7 @@ export function useEvents({ kinds, scope, includeNonRoots }: UseEventsOptions): 
     });
     const assembled = assembleFeed(pool, { feedRootsOnly });
     topRef.current = assembled[0]?.created_at ?? 0;
+    oldestRef.current = assembled[assembled.length - 1]?.created_at ?? 0;
     setItems(assembled);
   }, [feedRootsOnly]);
 
@@ -148,7 +149,7 @@ export function useEvents({ kinds, scope, includeNonRoots }: UseEventsOptions): 
     pendingRef.current = new Map();
     eosedRef.current = false;
     topRef.current = 0;
-    limitRef.current = PAGE;
+    oldestRef.current = 0;
     setItems([]);
     setNewCount(0);
     setLoading(true);
@@ -174,7 +175,10 @@ export function useEvents({ kinds, scope, includeNonRoots }: UseEventsOptions): 
     };
 
     // One declarative interest: cache + live + the worker's autonomous sync.
-    const handle = dataLayer.observe(buildFilters(kinds, scope, user, { limit: limitRef.current }), {
+    // The initial window is the "head": newest PAGE, no `until`, so it also
+    // carries the live tail and feeds the new-items buffer. loadOlder appends an
+    // older window beside it.
+    const handle = dataLayer.observe(buildFilters(kinds, scope, user, { limit: PAGE }), {
       onEvent,
       onEose: () => {
         eosedRef.current = true;
@@ -198,10 +202,21 @@ export function useEvents({ kinds, scope, includeNonRoots }: UseEventsOptions): 
   }, [recompute]);
 
   const loadOlder = React.useCallback(() => {
-    // Widen the interest's window — declarative; the worker fetches more if it
-    // sees fit. Re-replays cached matches (deduped) + extends the upstream sync.
-    limitRef.current += PAGE;
-    handleRef.current?.update(buildFilters(kinds, scope, user, { limit: limitRef.current }));
+    // Paginate with an `until` cursor rather than a growing `limit`. A growing
+    // limit asks each relay for its newest-N, so once N passes the relay's
+    // max-limit cap it returns the same set forever — older notes between the
+    // newest window and whatever stale events the cache happens to hold are never
+    // fetched, leaving a visible gap. An `until` window instead asks for the
+    // newest PAGE events *older than* the oldest note on screen: it starts
+    // exactly where the last page ended (until is inclusive) and is immune to the
+    // cap. The head window (no `until`) is kept alongside so the live tail and the
+    // new-items buffer keep working.
+    const head = buildFilters(kinds, scope, user, { limit: PAGE });
+    const older =
+      oldestRef.current > 0
+        ? buildFilters(kinds, scope, user, { until: oldestRef.current, limit: PAGE })
+        : [];
+    handleRef.current?.update([...head, ...older]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kindsKey, scopeKey, follows, wot]);
 

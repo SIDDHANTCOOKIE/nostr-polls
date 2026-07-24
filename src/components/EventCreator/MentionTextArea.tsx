@@ -70,18 +70,26 @@ const MentionTextArea: React.FC<MentionTextAreaProps> = ({
     const query = mentionQuery.toLowerCase();
     const results: ProfileMatch[] = [];
 
+    // Cached profiles can carry malformed content (e.g. a non-string nip05),
+    // so coerce every field to a string before doing string work on it.
+    const asString = (v: unknown): string => (typeof v === "string" ? v : "");
+
     profiles.forEach((profile, pubkey) => {
       if (results.length >= 8) return;
 
-      const name = (profile.display_name || profile.name || "").toLowerCase();
-      const nip05Val = (profile.nip05 || "").toLowerCase();
+      const displayNameField = asString(profile.display_name);
+      const nameField = asString(profile.name);
+      const nip05Field = asString(profile.nip05);
+
+      const name = (displayNameField || nameField).toLowerCase();
+      const nip05Val = nip05Field.toLowerCase();
 
       if (
         query === "" ||
         name.includes(query) ||
         nip05Val.includes(query)
       ) {
-        let displayName = profile.display_name || profile.name;
+        let displayName = displayNameField || nameField;
         if (!displayName) {
           try {
             displayName = nip19.npubEncode(pubkey).slice(0, 12);
@@ -92,8 +100,8 @@ const MentionTextArea: React.FC<MentionTextAreaProps> = ({
         results.push({
           pubkey,
           displayName,
-          picture: profile.picture || DEFAULT_IMAGE_URL,
-          nip05: profile.nip05,
+          picture: asString(profile.picture) || DEFAULT_IMAGE_URL,
+          nip05: nip05Field || undefined,
         });
       }
     });

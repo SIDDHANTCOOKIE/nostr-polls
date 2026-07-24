@@ -7,6 +7,7 @@ import {
   Outlet,
   Navigate,
   useParams,
+  useLocation,
 } from "react-router-dom";
 
 import { StatusBar, Style } from "@capacitor/status-bar";
@@ -76,6 +77,7 @@ import { Nip89Provider } from "./contexts/Nip89Context";
 import { useUserContext } from "./hooks/useUserContext";
 import { useAppContext } from "./hooks/useAppContext";
 import { DataLayerProvider } from "./dataLayer/hooks";
+import ErrorBoundary from "./components/Common/ErrorBoundary";
 import { getDataLayer } from "@formstr/local-relay";
 import TopicsFeed from "./components/Feed/TopicsFeed";
 import TopicExplorer from "./components/Feed/TopicsFeed/TopicsExplorerFeed";
@@ -161,6 +163,7 @@ function AppContent() {
 
   const { user } = useUserContext();
   const { resetStore } = useAppContext();
+  const location = useLocation();
   const prevPubkeyRef = React.useRef<string | null | undefined>(undefined);
 
   React.useEffect(() => {
@@ -203,6 +206,7 @@ function AppContent() {
               )}
             </DraggableCorner>
           )}
+          <ErrorBoundary resetKey={location.pathname}>
           <Routes>
           <Route path="/create" element={<ScrollPage><EventCreator /></ScrollPage>} />
           <Route
@@ -270,6 +274,7 @@ function AppContent() {
             element={<Navigate to={`/feeds/${localStorage.getItem("pollerama:lastFeed") || "home"}`} replace />}
           />
         </Routes>
+          </ErrorBoundary>
         </Box>
       </Box>
       {/* Docked at the bottom of the app column: it shrinks the content above

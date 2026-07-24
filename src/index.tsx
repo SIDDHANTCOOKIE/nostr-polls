@@ -6,6 +6,7 @@ import "@fontsource-variable/fredoka";
 import "@fontsource-variable/comfortaa";
 import "@fontsource-variable/raleway";
 import App from "./App";
+import ErrorBoundary from "./components/Common/ErrorBoundary";
 import { bootstrapDataLayer } from "./dataLayer/bootstrap";
 
 // Spawn the worker relay + wire the data layer before anything renders, so the
@@ -17,6 +18,8 @@ const root = ReactDOM.createRoot(
 );
 root.render(
   <React.StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </React.StrictMode>
 );
