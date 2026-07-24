@@ -1,3 +1,7 @@
+# 1.15.0
+
+- Games: a new Games section with three daily puzzles — 2048, Tetris and a racer. Everyone plays the exact same board and piece sequence for the day, Wordle-style, and you can play offline. Post your run to a daily leaderboard — there's no score-keeping server, so each run records your inputs and anyone can re-play them to verify the score, making the board provably fair.
+
 # 1.14.0
 
 - On-device drafts: save an in-progress poll, note, or comment locally and pick it back up later — autosaves a couple seconds after you stop typing, with a "Draft saved" indicator, and a new Drafts page (reachable from the create page and the feed's floating create button) to review, resume, or delete them. Drafts stay on this device only and are removed once you actually publish.
