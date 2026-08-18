@@ -6,6 +6,7 @@ import { dataLayer, type ObserveHandle } from "@formstr/local-relay";
 import { collectOnce } from "../dataLayer/collect";
 import { useRelays } from "./useRelays";
 import { useRelayRefresh } from "../dataLayer/hooks";
+import { isRelayHydrated } from "../dataLayer/relayRefresh";
 import { useUserContext } from "./useUserContext";
 import { signEvent } from "../nostr";
 import {
@@ -260,6 +261,11 @@ export function useMyTopicsFeed(myTopics: Set<string>) {
       ],
       {
         onEose: () => {
+          // A pre-hydration EOSE means the store was still loading, not
+          // actually empty — the relayRefresh-dep restart (below) retries once
+          // hydration completes, so hold off on clearing the spinner here.
+          // The hard timeout further down still fires regardless.
+          if (!isRelayHydrated()) return;
           initialLoadDoneRef.current = true;
           if (fresh) {
             setRefreshing(false);

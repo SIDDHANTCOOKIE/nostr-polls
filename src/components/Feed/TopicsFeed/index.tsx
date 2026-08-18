@@ -17,6 +17,7 @@ import {
 import SearchIcon from "@mui/icons-material/Search";
 import { dataLayer, type ObserveHandle } from "@formstr/local-relay";
 import { useRelayRefresh } from "../../../dataLayer/hooks";
+import { isRelayHydrated } from "../../../dataLayer/relayRefresh";
 import { Virtuoso } from "react-virtuoso";
 import TopicCard from "./TopicsCard";
 import { useListContext } from "../../../hooks/useListContext";
@@ -164,7 +165,10 @@ const TopicsFeed: React.FC = () => {
           }
         },
         onEose: () => {
-          if (isMounted.current) setLoading(false);
+          // A pre-hydration EOSE means the store was still loading, not
+          // actually empty — the relayRefresh-dep re-run below retries once
+          // hydration completes, so hold off on clearing the spinner here.
+          if (isMounted.current && isRelayHydrated()) setLoading(false);
         },
       }
     );

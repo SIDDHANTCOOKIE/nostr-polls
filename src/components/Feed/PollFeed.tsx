@@ -14,6 +14,7 @@ import { useSubNav } from "../../contexts/SubNavContext";
 import { useFeedActions } from "../../contexts/FeedActionsContext";
 import { safeSetItem } from "../../utils/localStorage";
 import { useRelayRefresh } from "../../dataLayer/hooks";
+import { isRelayHydrated } from "../../dataLayer/relayRefresh";
 
 // Minimal closer shape the feed tracks. The worker owns relays/chunking, so the
 // app only needs to be able to drop its interest.
@@ -238,6 +239,11 @@ export const PollFeed = () => {
 
     const onComplete = (failed = false) => {
       if (eoseFired) return;
+      // A pre-hydration EOSE means the store was still loading, not actually
+      // empty — wait for the hydration-triggered re-run (relayRefresh dep
+      // below) instead of flashing an empty/failed state. The hard timeout
+      // above still fires `failed` regardless, so this can't hang forever.
+      if (!failed && !isRelayHydrated()) return;
       eoseFired = true;
       clearTimeout(timeoutId);
       if (failed) {
