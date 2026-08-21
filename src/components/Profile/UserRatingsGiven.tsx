@@ -54,6 +54,9 @@ const UserRatingsGiven: React.FC<UserRatingsGivenProps> = ({ pubkey, scrollConta
       handle.unobserve();
       clearTimeout(timeout);
     };
+    // relayRefresh isn't read in the body — it's a dependency purely to force
+    // a fresh fetchRatings identity (and re-run below) once hydration completes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pubkey, relayRefresh]);
 
   useEffect(() => {

@@ -61,6 +61,9 @@ const UserNotesFeed: React.FC<UserNotesFeedProps> = ({ pubkey, scrollContainerRe
       handle.unobserve();
       clearTimeout(timeout);
     };
+    // relayRefresh isn't read in the body — it's a dependency purely to force
+    // a fresh fetchNotes identity (and re-run below) once hydration completes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pubkey, relayRefresh]);
 
   useEffect(() => {
